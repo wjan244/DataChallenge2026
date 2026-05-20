@@ -1,0 +1,15 @@
+data/
+checkpoints/
+
+.venv/
+uv.lock
+__pycache__/
+
+.vscode/
+.idea/
+.DS_Store
+
+docs/
+history/
+
+DataChallengeExample.ipynb

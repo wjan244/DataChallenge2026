@@ -1,0 +1,17 @@
+[project]
+name = "datachallenge2026"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pandas",
+    "numpy",
+    "tqdm",
+    "torch",
+    "torchvision",
+    "PrettyTable",
+    "matplotlib",
+    "timm>=1.0.27",
+    "torchinfo>=1.8.0",
+]
