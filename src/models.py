@@ -15,7 +15,6 @@ def get_model (model_name,num_classes=1):
 
     return model
 
-
 if __name__ == "__main__":
     from src.config import MODEL_NAME
 

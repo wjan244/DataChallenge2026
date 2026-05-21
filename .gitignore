@@ -11,5 +11,7 @@ __pycache__/
 
 docs/
 history/
+submission/
 
 DataChallengeExample.ipynb
+mlflow.db
