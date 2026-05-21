@@ -1,8 +1,3 @@
-# Modification à faire:
-    # - ne pas mettre en dur submission_path (trouver un moyen de le rendre dynamique)
-    # - ne pas mettre en dur checkpoint_path (trouver un moyen de le rendre dynamique)
-    # - retirer les dossier fantôme checkpoint et autres créés
-
 import argparse
 import torch
 import pandas as pd
@@ -14,34 +9,33 @@ from src.models import get_model
 from src.dataset import Dataset
 from src.data_loader import get_challenge_split
 
-# Load dataframes
-_, _, df_test = get_challenge_split()
-    
+def run_test(timestamp):
 
-if __name__ == "__main__":
+    # Load dataframes
+    _, _, df_test = get_challenge_split()
 
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
     SUBMISSION_DIR.mkdir(parents=True,exist_ok=True)
 
-# préparation des données
+    # préparation des données
     test_set = Dataset(df_test, IMG_DIR, training=False)
 
     params_val = {'batch_size': BATCH_SIZE,
             'shuffle': False,
             'num_workers': NUM_WORKERS}
-    
+
     test_generator = torch.utils.data.DataLoader(test_set, **params_val)
 
-# instanciation du modèle
+    # instanciation du modèle
     model = get_model(MODEL_NAME, num_classes=1)
 
-    checkpoint_path = CHECKPOINT_DIR / "mobilenetv3_challenge_epoch1.pt"
+    checkpoint_path = CHECKPOINT_DIR / f"{MODEL_NAME}_{timestamp}.pt"
 
     model.load_state_dict(torch.load(checkpoint_path,map_location=DEVICE))
     model = model.to(DEVICE)
     model.eval()
 
-# inférence
+    # inférence
     results_list = []
     with torch.inference_mode():
 
@@ -58,8 +52,8 @@ if __name__ == "__main__":
                 
     results_df = pd.DataFrame(results_list)
 
-# sauvegarde
-    submission_path = SUBMISSION_DIR/"submission.csv"
+    # sauvegarde
+    submission_path = SUBMISSION_DIR / f"submission_{MODEL_NAME}_{timestamp}.csv"
     results_df.to_csv(submission_path,index=False)
 
 

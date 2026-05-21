@@ -5,17 +5,16 @@ import mlflow
 from datetime import datetime
 from tqdm import tqdm
 
-from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, IMG_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS, LEARNING_RATE,LOSS_NAME, NUM_EPOCH, MLFLOW_TRACKING_URI
+from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, IMG_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS, LEARNING_RATE,LOSS_NAME, NUM_EPOCH
 from src.data_loader import get_challenge_split
 from src.dataset import Dataset
 from src.metrics import metric_fn
 from src.models import get_model
 
-# load data
-_, df_val, _ = get_challenge_split()
-
-
-if __name__ == "__main__":
+def run_evaluation(timestamp):
+    
+    # load data
+    _, df_val, _ = get_challenge_split()
 
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
     SUBMISSION_DIR.mkdir(parents=True,exist_ok=True)
@@ -32,7 +31,7 @@ if __name__ == "__main__":
 # instanciation du modèle
     model = get_model(MODEL_NAME, num_classes=1)
 
-    checkpoint_path = CHECKPOINT_DIR / "mobilenetv3_challenge_epoch1.pt"
+    checkpoint_path = CHECKPOINT_DIR / f"{MODEL_NAME}_{timestamp}.pt"
 
     model.load_state_dict(torch.load(checkpoint_path,map_location=DEVICE))
     model = model.to(DEVICE)
@@ -63,7 +62,6 @@ if __name__ == "__main__":
     score = metric_fn(results_female,results_male)
 
 # sauvegarde du score dans le journal (en local)
-    timestamp = f"{datetime.now():%Y-%m-%d_%H:%M}"
     log_path = HISTORY_DIR / "eval_history.csv"
 
     new_row = pd.DataFrame([{
@@ -81,15 +79,8 @@ if __name__ == "__main__":
     else:
         new_row.to_csv(log_path, index=False)
 
-    # MLFlow
-    if MLFLOW_TRACKING_URI:
-        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    
-    experiment = mlflow.set_experiment("DataChallenge_2026")
+    # MLFlow     
+    params_mlflow = new_row.drop(columns=["score"]).iloc[0].to_dict()
 
-    with mlflow.start_run(experiment_id=experiment.experiment_id,run_name=f"{MODEL_NAME}_{timestamp}"):
-        
-        params_mlflow = new_row.drop(columns=["score"]).iloc[0].to_dict()
-
-        mlflow.log_params(params_mlflow)
-        mlflow.log_metric("val_score",score)
+    mlflow.log_params(params_mlflow)
+    mlflow.log_metric("val_score",score)
