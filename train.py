@@ -1,7 +1,3 @@
-# modifier train:
-#   - ajouter un scheduler
-#   - reprendre la sauvegarde en locale (ne prend que la dernière)
-
 import mlflow
 import pandas as pd
 import timm
@@ -50,11 +46,13 @@ def run_train(timestamp):
         loss_fn = nn.BCELoss()
         # optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+        # scheduler 
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=NUM_EPOCH,eta_min=0,last_epoch=-1)
 
     # paramétrisatio MLFlow
     hyper_params = {
         "model":MODEL_NAME,
-        "learnin_rate" : LEARNING_RATE,
+        "learnin_rate" : scheduler.get_last_lr()[0],
         "num_epoch": NUM_EPOCH,
         "batch_size": BATCH_SIZE,
         "num_worker": NUM_WORKERS,
@@ -93,33 +91,42 @@ def run_train(timestamp):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
         
         final_loss = running_loss/len(training_generator)
-
         # métrique mlflow (loss - pas = époque)
+        mlflow.log_metric(key="lr",value=scheduler.get_last_lr()[0],step=n)
         mlflow.log_metric(key="loss",value=final_loss,step=n)
+        # update du scheduler
+        scheduler.step()
 
-        # sauvegarde du modèle en local
+        # sauvegarde du modèle en local et mlflow
         if final_loss < best_loss:
             best_loss = final_loss
-            print(f"sauvegarde du modèle à l'époque {n+1}")
             torch.save(model.state_dict(), save_path)
+            print(f"modèle sauvegarde en local à l'époque {n+1}")
 
-    # sauvegarde loss en local
-    log_path = HISTORY_DIR / f"train_history_loss_{MODEL_NAME}_{TRAINING_MODE}.csv" 
-    new_row = pd.DataFrame([{
-            "id_run": mlflow.active_run().info.run_id,
-            "date": timestamp,
-            "modèle": MODEL_NAME,
-            "learning_rate": LEARNING_RATE,
-            "num_epoch": NUM_EPOCH,
-            "loss_name": LOSS_NAME,
-            "batch_size": BATCH_SIZE,
-            "traing_mode": TRAINING_MODE,
-            "final_train_loss": final_loss
-        }])    
-        # ajout de la nouvelle ligne si non existante
-    if log_path.exists():
-        new_row.to_csv(log_path, mode='a', header=False, index=False)
-    else:
-        new_row.to_csv(log_path, index=False)
+        # sauvegarde loss en local
+        log_path = HISTORY_DIR / f"train_history_loss_{MODEL_NAME}_{TRAINING_MODE}.csv" 
+        new_row = pd.DataFrame([{
+                "id_run": mlflow.active_run().info.run_id,
+                "date": timestamp,
+                "modèle": MODEL_NAME,
+                "learning_rate": LEARNING_RATE,
+                "epoch": n+1,
+                "num_epoch": NUM_EPOCH,
+                "loss_name": LOSS_NAME,
+                "batch_size": BATCH_SIZE,
+                "traing_mode": TRAINING_MODE,
+                "final_train_loss": final_loss
+            }])   
+        
+        if log_path.exists():
+            new_row.to_csv(log_path, mode='a', header=False, index=False)
+        else:
+            new_row.to_csv(log_path, index=False) 
+             
+    # sauvegarde des poids sur MLFlow
+    model.load_state_dict(torch.load(save_path))
+    mlflow.pytorch.log_model(model,artifact_path=f"{MODEL_NAME}_{TRAINING_MODE}")
+

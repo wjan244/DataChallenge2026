@@ -18,3 +18,4 @@ if __name__ == "__main__":
         run_evaluation(timestamp)
         run_test(timestamp)
         
+    mlflow.end_run()
