@@ -12,15 +12,17 @@ class Dataset(torch.utils.data.Dataset):
          self.image_dir = image_dir
          self.df = df
          self.transform = transform if transform else transforms.ToTensor()
+         self.augment_factor = 4 if training else 1
          
     def __len__(self):
         'Denotes the total number of samples'
-        return len(self.df)
+        return len(self.df)*self.augment_factor
 
-    def __getitem__(self, index):
+    def __getitem__(self, idx):
         'Generates one sample of data'
         # Select sample
-        row = self.df.iloc[index]
+        real_idx = idx % len(self.df) # forcer l'index à revenir à 0 dès que taille max atteinte (N_SAMPLES)
+        row = self.df.iloc[real_idx]
         filename = row['filename']
 
         # Load data and get label
