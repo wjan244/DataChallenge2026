@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import torch
@@ -32,7 +33,7 @@ LOSS_NAME = "MSE"
 
 # hyper-paramètres Dataloader
 BATCH_SIZE = 16
-NUM_WORKERS = -1
+NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
 
 # fine_tuning - modes d'entrainement
 TRAINING_MODE = "linear_probing"
