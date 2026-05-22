@@ -9,13 +9,19 @@
 #SBATCH --gpus 1 # SQAC uses only one GPU for a MLP
 
 #SBATCH --acctg-freq=task=10
-#SBATCH --job-name=sac
+#SBATCH --job-name=test
 #SBATCH --error=logs/%j.out
 #SBATCH --out=logs/%j.out
 
 
 # HELP
+# connect:
+
 # sinteractive --gpus 1 --mem 40 --cpus-per-task 10 --time 10:00:00 --partition 3090
+# sbatch scripts/run_cluster.sbatch
+# tail -f logs/831118.out
+# squeue -j 831118
+# rsync -vr DataChallenge2026.zip name@xxx:/home/infres/cmergny-25/DataChallenge2026/data
 
 echo "=== JOB START ==="
 
