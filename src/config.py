@@ -21,12 +21,19 @@ elif torch.cuda.is_available():
 else:
       DEVICE = torch.device("cpu")
 
-# modèles - hyper paramètres d'entrainement
-MODEL_NAME = "mobilenetv3_small_100"
+# -------------------- PARAMETRES --------------------#
+# modèles
+MODEL_NAME = 'beit_base_patch16_224.in22k_ft_in22k_in1k'
+
+# hyper paramètres d'entrainement
 LEARNING_RATE = 0.001
-NUM_EPOCH = 1
+NUM_EPOCH = 10
 LOSS_NAME = "MSE"
 
 # hyper-paramètres Dataloader
-BATCH_SIZE = 64
-NUM_WORKERS = 0
+BATCH_SIZE = 16
+NUM_WORKERS = -1
+
+# fine_tuning - modes d'entrainement
+TRAINING_MODE = "linear_probing"
+NUM_CLASSES = 1

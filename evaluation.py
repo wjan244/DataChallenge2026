@@ -1,26 +1,38 @@
 import pandas as pd
+import timm
 import torch
 import mlflow
 
-from datetime import datetime
 from tqdm import tqdm
 
-from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, IMG_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS, LEARNING_RATE,LOSS_NAME, NUM_EPOCH
+from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, IMG_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS, LEARNING_RATE,LOSS_NAME, NUM_EPOCH, TRAINING_MODE
 from src.data_loader import get_challenge_split
 from src.dataset import Dataset
 from src.metrics import metric_fn
 from src.models import get_model
 
 def run_evaluation(timestamp):
-    
+
+    # création des dossiers locaux
+    HISTORY_DIR.mkdir(parents=True,exist_ok=True)
+    SUBMISSION_DIR.mkdir(parents=True,exist_ok=True)
+    checkpoint_path = CHECKPOINT_DIR / f"{MODEL_NAME}_{TRAINING_MODE}_{timestamp}.pt"
+
     # load data
     _, df_val, _ = get_challenge_split()
 
-    HISTORY_DIR.mkdir(parents=True,exist_ok=True)
-    SUBMISSION_DIR.mkdir(parents=True,exist_ok=True)
+    # instanciation du modèle
+    model = get_model(MODEL_NAME, num_classes=1)
+        # extraire la configuration des données du modèle
+    data_config = timm.data.resolve_model_data_config(model)
+    val_transform = timm.data.create_transform(**data_config, is_training=False) 
+        # -> DEVICE
+    model.load_state_dict(torch.load(checkpoint_path,map_location=DEVICE))
+    model = model.to(DEVICE)
+    model.eval()
 
-# préparation des données
-    validation_set = Dataset(df_val, IMG_DIR)
+    # préparation des données
+    validation_set = Dataset(df_val, IMG_DIR, training=True, transform=val_transform)
 
     params_val = {'batch_size': BATCH_SIZE,
             'shuffle': False,
@@ -28,16 +40,7 @@ def run_evaluation(timestamp):
     
     validation_generator = torch.utils.data.DataLoader(validation_set, **params_val)
 
-# instanciation du modèle
-    model = get_model(MODEL_NAME, num_classes=1)
-
-    checkpoint_path = CHECKPOINT_DIR / f"{MODEL_NAME}_{timestamp}.pt"
-
-    model.load_state_dict(torch.load(checkpoint_path,map_location=DEVICE))
-    model = model.to(DEVICE)
-    model.eval()
-
-# inférence
+    # inférence
     results_list = []
     with torch.inference_mode():
 
@@ -56,13 +59,13 @@ def run_evaluation(timestamp):
                 
     results_df = pd.DataFrame(results_list)
 
-# evaluation
+    # evaluation
     results_male = results_df.loc[results_df["gender"] == 1.0]
     results_female = results_df.loc[results_df["gender"] == 0.0]
     score = metric_fn(results_female,results_male)
 
-# sauvegarde du score dans le journal (en local)
-    log_path = HISTORY_DIR / "eval_history.csv"
+    # sauvegarde du score dans le journal (en local)
+    log_path = HISTORY_DIR / f"eval_history_{MODEL_NAME}_{TRAINING_MODE}_{timestamp}.csv"
 
     new_row = pd.DataFrame([{
         "date":timestamp,
@@ -72,14 +75,13 @@ def run_evaluation(timestamp):
         "loss": LOSS_NAME,
         "batch_size":BATCH_SIZE,
         "score":score}])
-    
-    # ajout de la nouvelle ligne si non existante
+        # ajout de la nouvelle ligne si non existante
     if log_path.exists():
         new_row.to_csv(log_path, mode='a', header=False, index=False)
     else:
         new_row.to_csv(log_path, index=False)
 
-    # MLFlow     
+    # paramétrisation MLFlow (métrique et params)     
     params_mlflow = new_row.drop(columns=["score"]).iloc[0].to_dict()
 
     mlflow.log_params(params_mlflow)
