@@ -4,12 +4,14 @@ import timm
 import torch 
 import torch.nn as nn
 
+from torchvision.transforms import v2
 from tqdm import tqdm
 
 from src.config import CHECKPOINT_DIR,HISTORY_DIR, IMG_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS, NUM_EPOCH, LEARNING_RATE, LOSS_NAME,TRAINING_MODE
 from src.dataset import Dataset
-from src.data_loader import get_challenge_split
+from src.data_utils import get_challenge_split
 from src.models import get_model
+from src.transforms import get_augmentation_transforms
 
 
 def run_train(timestamp):
@@ -19,19 +21,25 @@ def run_train(timestamp):
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
 
     # load dataframes
-    df_train, _, _ = get_challenge_split()
+    df_train, df_val, df_test = get_challenge_split()
 
     # instancier le modèle
     model = get_model(MODEL_NAME, num_classes=1)
+         # -> DEVICE
+    model = model.to(DEVICE)
         # extraire la configuration des données du modèle
     data_config = timm.data.resolve_model_data_config(model)
-    timm_transform = timm.data.create_transform(**data_config, is_training=True)
-        # -> DEVICE
-    model = model.to(DEVICE)
+    timm_transform = timm.data.create_transform(**data_config, is_training=False)
+   
+    # dataAugmentation
+        # instantier les augmentations
+    augment_transform = get_augmentation_transforms()
+        # pipeLine Transform (model + augmentation)
+    transform_pipeline = v2.Compose([augment_transform,timm_transform])
 
     # préparation des données
         # Data
-    training_set = Dataset(df=df_train,image_dir=IMG_DIR,training=True,transform=timm_transform)
+    training_set = Dataset(df=df_train,image_dir=IMG_DIR,training=True,transform=transform_pipeline)
         # DataLoader
     params_train = {'batch_size': BATCH_SIZE,
             'shuffle': True,
@@ -129,4 +137,6 @@ def run_train(timestamp):
     # sauvegarde des poids sur MLFlow
     model.load_state_dict(torch.load(save_path))
     mlflow.pytorch.log_model(model,artifact_path=f"{MODEL_NAME}_{TRAINING_MODE}")
+
+    return df_val, df_test
 

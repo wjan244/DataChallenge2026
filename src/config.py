@@ -24,11 +24,11 @@ else:
 
 # -------------------- PARAMETRES --------------------#
 # modèles
-MODEL_NAME = 'beit_base_patch16_224.in22k_ft_in22k_in1k'
+MODEL_NAME = 'mobilenetv3_small_075'
 
 # hyper paramètres d'entrainement
 LEARNING_RATE = 0.001
-NUM_EPOCH = 10
+NUM_EPOCH = 1
 LOSS_NAME = "MSE"
 
 # hyper-paramètres Dataloader
@@ -36,5 +36,8 @@ BATCH_SIZE = 16
 NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
 
 # fine_tuning - modes d'entrainement
-TRAINING_MODE = "linear_probing"
+TRAINING_MODE = None
 NUM_CLASSES = 1
+
+# distribution des données
+N_SAMPLE = 15000

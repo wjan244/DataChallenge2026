@@ -8,9 +8,9 @@ from tqdm import tqdm
 from src.config import DEVICE,MODEL_NAME,IMG_DIR,HISTORY_DIR,CHECKPOINT_DIR,SUBMISSION_DIR, BATCH_SIZE, NUM_WORKERS, TRAINING_MODE
 from src.models import get_model
 from src.dataset import Dataset
-from src.data_loader import get_challenge_split
+from src.data_utils import get_challenge_split
 
-def run_test(timestamp):
+def run_test(timestamp,df_test):
 
     # création des dossiers locaux
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
@@ -19,7 +19,7 @@ def run_test(timestamp):
     checkpoint_path = CHECKPOINT_DIR / f"{MODEL_NAME}_{TRAINING_MODE}_{timestamp}.pt"
 
     # Load dataframes
-    _, _, df_test = get_challenge_split()
+    #_, _, df_test = get_challenge_split()
 
      # instanciation du modèle
     model = get_model(MODEL_NAME, num_classes=1)

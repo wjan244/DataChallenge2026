@@ -6,12 +6,12 @@ import mlflow
 from tqdm import tqdm
 
 from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, IMG_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS, LEARNING_RATE,LOSS_NAME, NUM_EPOCH, TRAINING_MODE
-from src.data_loader import get_challenge_split
+from src.data_utils import get_challenge_split
 from src.dataset import Dataset
 from src.metrics import metric_fn
 from src.models import get_model
 
-def run_evaluation(timestamp):
+def run_evaluation(timestamp,df_val):
 
     # création des dossiers locaux
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
@@ -19,7 +19,7 @@ def run_evaluation(timestamp):
     checkpoint_path = CHECKPOINT_DIR / f"{MODEL_NAME}_{TRAINING_MODE}_{timestamp}.pt"
 
     # load data
-    _, df_val, _ = get_challenge_split()
+    #_, df_val, _ = get_challenge_split()
 
     # instanciation du modèle
     model = get_model(MODEL_NAME, num_classes=1)
