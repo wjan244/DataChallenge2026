@@ -8,7 +8,6 @@ from tqdm import tqdm
 from src.config import DEVICE,MODEL_NAME,IMG_DIR,HISTORY_DIR,CHECKPOINT_DIR,SUBMISSION_DIR, BATCH_SIZE, NUM_WORKERS, TRAINING_MODE
 from src.models import get_model
 from src.dataset import Dataset
-from src.data_utils import get_challenge_split
 
 def run_test(timestamp,df_test):
 

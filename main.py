@@ -15,8 +15,9 @@ if __name__ == "__main__":
 
     timestamp = f"{datetime.now():%Y-%m-%d_%H:%M}"
     with mlflow.start_run(experiment_id=experiment.experiment_id,run_name=f"{MODEL_NAME}_{timestamp}"):
-        df_val, df_test = run_train(timestamp)
-        run_evaluation(timestamp,df_val)
+        df_val_raw, df_val_samp, df_test = run_train(timestamp)
+        run_evaluation(timestamp,df_val_raw,prefix="eval_raw")
+        run_evaluation(timestamp,df_val_samp,prefix="eval_samp")
         run_test(timestamp,df_test)
         
     mlflow.end_run()

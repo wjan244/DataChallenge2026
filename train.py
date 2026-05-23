@@ -21,7 +21,8 @@ def run_train(timestamp):
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
 
     # load dataframes
-    df_train, df_val, df_test = get_challenge_split()
+    df_train, df_val_raw, df_val_samp, df_test = get_challenge_split()
+    #df_train, df_val, df_test = get_challenge_split()
 
     # instancier le modèle
     model = get_model(MODEL_NAME, num_classes=1)
@@ -138,5 +139,5 @@ def run_train(timestamp):
     model.load_state_dict(torch.load(save_path))
     mlflow.pytorch.log_model(model,artifact_path=f"{MODEL_NAME}_{TRAINING_MODE}")
 
-    return df_val, df_test
+    return df_val_raw, df_val_samp, df_test
 

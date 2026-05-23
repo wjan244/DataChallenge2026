@@ -6,12 +6,11 @@ import mlflow
 from tqdm import tqdm
 
 from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, IMG_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS, LEARNING_RATE,LOSS_NAME, NUM_EPOCH, TRAINING_MODE
-from src.data_utils import get_challenge_split
 from src.dataset import Dataset
 from src.metrics import metric_fn
 from src.models import get_model
 
-def run_evaluation(timestamp,df_val):
+def run_evaluation(timestamp,df_val,prefix):
 
     # création des dossiers locaux
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
@@ -81,8 +80,4 @@ def run_evaluation(timestamp,df_val):
     else:
         new_row.to_csv(log_path, index=False)
 
-    # paramétrisation MLFlow (métrique et params)     
-    params_mlflow = new_row.drop(columns=["score"]).iloc[0].to_dict()
-
-    mlflow.log_params(params_mlflow)
-    mlflow.log_metric("val_score",score)
+    mlflow.log_metric(f"{prefix}_val_score",score)
