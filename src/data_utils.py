@@ -56,8 +56,9 @@ def get_challenge_split(screenshot_path=None):
 
     # adaptation de train et eval à la distribution cible (test)
     n = len(df_train) if screenshot_path else N_SAMPLE
+    n_val = len(df_val) if screenshot_path else 5000
     df_train, _ , _ = _distribution_adaptation(n_sample=n, df=df_train, test_distribution=test_dist)
-    df_val_samp, _, _ = _distribution_adaptation(n_sample=5000,df=df_val, test_distribution=test_dist)
+    df_val_samp, _, _ = _distribution_adaptation(n_sample=n_val,df=df_val, test_distribution=test_dist)
 
     return df_train, df_val_raw, df_val_samp, df_test
 
