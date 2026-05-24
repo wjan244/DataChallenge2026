@@ -3,6 +3,7 @@ import pandas as pd
 
 from scipy.stats import beta, entropy
 from sklearn.model_selection import train_test_split
+from PIL import Image
 
 from src.config import CSV_DIR, N_SAMPLE
 
@@ -54,6 +55,41 @@ def get_challenge_split():
     df_val_samp, _, _ = _distribution_adaptation(n_sample=5000,df=df_val)
 
     return df_train, df_val_raw, df_val_samp, df_test
+
+def _get_test_distribution_from_screenshot(screenshot_path, n_bins=30):
+    """
+    screenshot_path : capture d'écran cadrée sur le graphique test uniquement
+    (juste la zone des barres, sans axes ni labels)
+    """
+    arr = np.array(Image.open(screenshot_path).convert("RGB"))
+    
+    plot_height, plot_width = arr.shape[:2]
+    
+    # Détection des barres bleues
+    blue_mask = (arr[:,:,2].astype(int) - arr[:,:,0].astype(int)) > 5
+
+    # Hauteur de barre par colonne
+    top_rows = np.full(plot_width, plot_height, dtype=float)
+    for c in range(plot_width):
+        col = blue_mask[:, c]
+        if col.any():
+            top_rows[c] = np.where(col)[0].min()
+
+    heights_px = np.clip(plot_height - top_rows, 0, None)
+
+    # Agréger en n_bins
+    bin_counts = np.zeros(n_bins)
+    bw = plot_width / n_bins
+    for i in range(n_bins):
+        s = int(i * bw)
+        e = max(s+1, int((i+1) * bw))
+    
+        # Rectangle de hauteur plot_height, largeur (e-s)
+        patch = blue_mask[:, s:e]          # shape: (plot_height, e-s)
+        bin_counts[i] = patch.mean()       # proportion de pixels bleus dans le rectangle
+
+    eps = 1e-6
+    return (bin_counts + eps) / (bin_counts.sum() + eps * n_bins)
 
 
 if __name__ == "__main__":
