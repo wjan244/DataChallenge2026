@@ -94,8 +94,8 @@ if __name__ == "__main__":
     
     import matplotlib.pyplot as plt
 
-    df_train_sub, df_val_raw, df_val_samp, df_test = get_challenge_split()
-
+    df_train_sub, df_val_raw, df_val_samp, df_test = get_challenge_split(screenshot_path="data/test_distribution.png")
+    """
     test_distribution = beta.pdf(bin_center, a=1.5, b=5)
     test_distribution = (test_distribution + eps) / (np.sum(test_distribution) + eps)
 
@@ -139,6 +139,22 @@ if __name__ == "__main__":
     ax2.legend()
 
     plt.tight_layout()
+    plt.show()"""
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # Distribution train brute
+    ax.hist(df_train_sub["FaceOcclusion"], bins=N_BINS, density=True, alpha=0.5, label="Train brut")
+
+    # Distribution train repondérée
+    ax.hist(df_train_sub["FaceOcclusion"], bins=N_BINS, weights=df_train_sub["iw"], density=True, alpha=0.5, label="Train repondéré")
+
+    # Distribution test (depuis le screenshot)
+    test_dist = _get_test_distribution_from_screenshot("data/test_distribution.png")
+    ax.plot(bin_center, test_dist * N_BINS, color="red", linewidth=2, label="Test (screenshot)")
+
+    ax.set_xlabel("Taux d'occlusion")
+    ax.legend()
     plt.show()
 
 
