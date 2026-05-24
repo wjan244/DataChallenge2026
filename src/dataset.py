@@ -35,7 +35,8 @@ class Dataset(torch.utils.data.Dataset):
             y = row['FaceOcclusion']
             y = np.float32(y)
             gender = row['gender']
-            return X, y, gender, filename
+            iw = np.float32(row['iw']) if 'iw' in self.df.columns else np.float32(1.0)
+            return X, y, gender, filename, iw
         else:
             y = None
             gender = None

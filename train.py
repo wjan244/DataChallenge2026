@@ -80,12 +80,14 @@ def run_train(timestamp):
         running_loss = 0
         progress_bar = tqdm(enumerate(training_generator), total=len(training_generator), desc="Entraînement")
         
-        for batch_idx, (X, y, gender, filename) in progress_bar:
+        for batch_idx, (X, y, gender, filename, iw) in progress_bar:
             # Transfert -> device
             X, y = X.to(DEVICE), y.to(DEVICE)
+            iw = iw.to(DEVICE)
             y = y.view(-1, 1)
+            iw = iw.view(-1, 1)
             y_pred = model(X)
-            loss = loss_fn(y_pred, y)
+            loss = (iw * (y_pred - y) ** 2).mean()
 
             running_loss += loss.item()
 
