@@ -14,15 +14,16 @@ eps = 1e-6
 df_train_raw = pd.read_csv(CSV_DIR / "train.csv", delimiter=',')
 df_test_raw = pd.read_csv(CSV_DIR / "test_students.csv", delimiter=',')
 
-def _distribution_adaptation(n_sample,df):
+def _distribution_adaptation(n_sample, df, test_distribution=None):
 
     # distribution de df
     train_distribution, _ = np.histogram(df["FaceOcclusion"],bins=30, density=True) 
     train_distribution = (train_distribution + eps) / (np.sum(train_distribution)+eps)
 
     # estimation distribution cible (test)
-    test_distribution = beta.pdf(bin_center,a=1.5,b=5) + eps
-    test_distribution = test_distribution/(np.sum(test_distribution)+eps)   # normalisation
+    if test_distribution is None:
+        test_distribution = beta.pdf(bin_center,a=1.5,b=5) + eps
+        test_distribution = test_distribution/(np.sum(test_distribution)+eps)   # normalisation
 
     # calcul du ratio de divergence KL
     ratio_KL = test_distribution / (train_distribution + 1e-6)
@@ -34,11 +35,11 @@ def _distribution_adaptation(n_sample,df):
 
     sub_df = df.sample(n=n_sample,weights='D_KL',replace=False,random_state=42)
 
-    sub_df = sub_df.drop(columns=["D_KL"])
+    sub_df = sub_df.rename(columns={"D_KL": "iw"})
 
     return sub_df, test_distribution, train_distribution
 
-def get_challenge_split():
+def get_challenge_split(screenshot_path=None):
 
     # Remove nan values
     df_train_clean = df_train_raw.dropna()
@@ -50,9 +51,13 @@ def get_challenge_split():
     df_train = df_train.reset_index(drop=True)
     df_val_raw = df_val.reset_index(drop=True).copy()
 
+    # distribution cible : pixels si screenshot fournie, sinon None → Beta dans _distribution_adaptation
+    test_dist = _get_test_distribution_from_screenshot(screenshot_path) if screenshot_path else None
+
     # adaptation de train et eval à la distribution cible (test)
-    df_train, _ , _ = _distribution_adaptation(n_sample=N_SAMPLE,df=df_train)
-    df_val_samp, _, _ = _distribution_adaptation(n_sample=5000,df=df_val)
+    n = len(df_train) if screenshot_path else N_SAMPLE
+    df_train, _ , _ = _distribution_adaptation(n_sample=n, df=df_train, test_distribution=test_dist)
+    df_val_samp, _, _ = _distribution_adaptation(n_sample=5000,df=df_val, test_distribution=test_dist)
 
     return df_train, df_val_raw, df_val_samp, df_test
 
@@ -67,15 +72,6 @@ def _get_test_distribution_from_screenshot(screenshot_path, n_bins=30):
     
     # Détection des barres bleues
     blue_mask = (arr[:,:,2].astype(int) - arr[:,:,0].astype(int)) > 5
-
-    # Hauteur de barre par colonne
-    top_rows = np.full(plot_width, plot_height, dtype=float)
-    for c in range(plot_width):
-        col = blue_mask[:, c]
-        if col.any():
-            top_rows[c] = np.where(col)[0].min()
-
-    heights_px = np.clip(plot_height - top_rows, 0, None)
 
     # Agréger en n_bins
     bin_counts = np.zeros(n_bins)
