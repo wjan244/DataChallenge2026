@@ -5,9 +5,9 @@ from scipy.stats import beta, entropy
 from sklearn.model_selection import train_test_split
 from PIL import Image
 
-from src.config import CSV_DIR, N_SAMPLE
+from src.config import CSV_DIR, N_SAMPLE, N_BINS
 
-bins = np.linspace(0,1,31)
+bins = np.linspace(0,1,N_BINS+1)
 bin_center = (bins[:-1]+bins[1:])/2
 eps = 1e-6
 
@@ -17,7 +17,7 @@ df_test_raw = pd.read_csv(CSV_DIR / "test_students.csv", delimiter=',')
 def _distribution_adaptation(n_sample, df, test_distribution=None):
 
     # distribution de df
-    train_distribution, _ = np.histogram(df["FaceOcclusion"],bins=30, density=True) 
+    train_distribution, _ = np.histogram(df["FaceOcclusion"],bins=N_BINS, density=True) 
     train_distribution = (train_distribution + eps) / (np.sum(train_distribution)+eps)
 
     # estimation distribution cible (test)
@@ -61,7 +61,7 @@ def get_challenge_split(screenshot_path=None):
 
     return df_train, df_val_raw, df_val_samp, df_test
 
-def _get_test_distribution_from_screenshot(screenshot_path, n_bins=30):
+def _get_test_distribution_from_screenshot(screenshot_path, n_bins=N_BINS):
     """
     screenshot_path : capture d'écran cadrée sur le graphique test uniquement
     (juste la zone des barres, sans axes ni labels)
@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
     # distribution
         # train
-    train_distribution, _ = np.histogram(df_train_raw["FaceOcclusion"],bins=30, density=True) 
+    train_distribution, _ = np.histogram(df_train_raw["FaceOcclusion"],bins=N_BINS, density=True) 
     train_distribution = (train_distribution + eps) / (np.sum(train_distribution)+eps)
         # train échantillonné
     train_sub_distribution, _ = np.histogram(df_train_sub["FaceOcclusion"], density=True, bins=bins)

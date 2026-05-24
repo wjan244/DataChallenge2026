@@ -41,3 +41,4 @@ NUM_CLASSES = 1
 
 # distribution des données
 N_SAMPLE = 15000
+N_BINS = 30
