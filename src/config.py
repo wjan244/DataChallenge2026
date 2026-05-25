@@ -24,8 +24,10 @@ else:
 
 # -------------------- PARAMETRES --------------------#
 # modèles
-MODEL_NAME = 'mobilenetv3_small_075'
-
+MODEL_NAME = 'beit3_base_patch16_224'
+# exemples:
+# 'beit3_base_patch16_224'
+# 'mobilenetv3_small_075'
 # hyper paramètres d'entrainement
 LEARNING_RATE = 0.001
 NUM_EPOCH = 1
@@ -36,8 +38,13 @@ BATCH_SIZE = 16
 NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
 
 # fine_tuning - modes d'entrainement
-TRAINING_MODE = None
+      # methode
+TRAINING_MODE = "LoRA_Transformer"
 NUM_CLASSES = 1
+      # LoRA
+RANK = 6
+ALPHA = 16
+DROPOUT = 0.05
 
 # distribution des données
-N_SAMPLE = 15000
+N_SAMPLE = 20000
