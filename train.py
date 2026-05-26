@@ -8,7 +8,7 @@ from pathlib import Path
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from src.config import CHECKPOINT_DIR,HISTORY_DIR, IMG_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS
+from src.config import CHECKPOINT_DIR,HISTORY_DIR, IMG_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS, PATIENCE
 from src.dataset import Dataset
 from src.data_utils import get_challenge_split
 from src.models import get_model
@@ -95,6 +95,11 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,preceden
     save_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
     best_loss = float('inf')
 
+    # initialisation early stopping
+    best_loss = float('inf')
+    patience = PATIENCE
+    patience_counter = 0
+
     for n in range(num_epoch):
         print(f"Epoch {n+1}")
         model.train()
@@ -133,8 +138,11 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,preceden
         # sauvegarde du modèle en local et mlflow
         if final_loss < best_loss:
             best_loss = final_loss
+            patience_counter = 0
             torch.save(model.state_dict(), save_path)
             print(f"modèle sauvegarde à l'époque {n+1}")
+        else: 
+            patience_counter +=1
 
         # sauvegarde loss en local
         log_path = HISTORY_DIR / f"{timestamp}_train_history_loss_{model_tag}.csv" 
@@ -156,6 +164,10 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,preceden
             new_row.to_csv(log_path, mode='a', header=False, index=False)
         else:
             new_row.to_csv(log_path, index=False) 
+
+        if patience_counter >= patience:
+            print(f"stagnation de l'entraînement - arrêt à l'époque {n+1}")
+            break
              
     # sauvegarde des poids sur MLFlow
     model.load_state_dict(torch.load(save_path))

@@ -25,13 +25,14 @@ else:
 # distribution des données
 N_SAMPLE = 20000
 
-# modèles
+# Hyper-paramètres entrainement
 MODEL_NAME = 'vit_tiny_patch16_224'
 
                   # exemples:
                   # 'beit3_base_patch16_224'
                   # 'mobilenetv3_small_075'
                   # hyper paramètres d'entrainement
+PATIENCE = 5
 
 # hyper-paramètres Dataloader
 BATCH_SIZE = 16
