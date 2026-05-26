@@ -5,11 +5,11 @@ import pandas as pd
 
 from tqdm import tqdm
 
-from src.config import DEVICE,MODEL_NAME,IMG_DIR,HISTORY_DIR,CHECKPOINT_DIR,SUBMISSION_DIR, BATCH_SIZE, NUM_WORKERS
+from src.config import DEVICE,MODEL_NAME,HISTORY_DIR,CHECKPOINT_DIR,SUBMISSION_DIR
 from src.models import get_model
-from src.dataset import Dataset
 
-def run_test(timestamp,df_test:pd.DataFrame,method_FT)->None:
+
+def run_test(timestamp,test_loader,method_FT)->None:
     """
     Pipe comple de test:
     - instancie le modèle pré entrainé
@@ -34,20 +34,11 @@ def run_test(timestamp,df_test:pd.DataFrame,method_FT)->None:
     model = model.to(DEVICE)
     model.eval()
 
-    # préparation des données
-    test_set = Dataset(df_test, IMG_DIR, training=False, transform=test_transform)
-        # DataLoader
-    params_val = {'batch_size': BATCH_SIZE,
-            'shuffle': False,
-            'num_workers': NUM_WORKERS}
-    
-    test_generator = torch.utils.data.DataLoader(test_set, **params_val)
-
     # inférence
     results_list = []
     with torch.inference_mode():
 
-        progress_bar = tqdm(enumerate(test_generator),total=len(test_generator),desc="test")
+        progress_bar = tqdm(enumerate(test_loader),total=len(test_loader),desc="test")
         for batch_idx, (X, filename) in progress_bar:
             # Transfer -> device
             X = X.to(DEVICE)

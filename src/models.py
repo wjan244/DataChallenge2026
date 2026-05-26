@@ -6,7 +6,7 @@ from torch import nn
 from torchinfo import summary
 
 from src.config import NUM_CLASSES,RANK,DROPOUT,ALPHA
-from src.finetuning import inject_linear_probing, inject_lora_transformer
+from src.finetuning import inject_lora_transformer
 
 class OcclusionModel(nn.Module):
     """
@@ -48,9 +48,6 @@ TRAIN_MODE = {
     "linear_probing": setup_linear_probing_with_lora, # renvoyer modèle avec injection mat LoRA et gèle LoRA + Backbone
     "LoRA_Transformer": setup_lora_finetuning} # Fine tuning par LoRA
 
-# TRAIN_MODE = {"linear_probing":inject_linear_probing,
-#               "LoRA_Transformer": lambda model: inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT), # renvoyer modèle avec injection mat LoRA
-#               "domain_adaptation":lambda model:model} # renvoyer le modèle sans modif
 
 def get_model (model_name:str,num_classes=NUM_CLASSES,method:str|None=None,weights:str|Path|None=None)->nn.Module:
     """instancier le modèle défini dans config.py et lui affecter une méthode de FineTuning:

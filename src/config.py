@@ -44,10 +44,15 @@ RANK = 1
 ALPHA = 1
 DROPOUT = 0
 
+from src.data_loader import (get_challenge_train_loader,get_celeba_train_loader, 
+                             get_celeba_val_loader, get_challenge_val_loader)
+
 # configuration des méthodes de Fine_Tuning
 CONFIG_DOMAINE = {
-    "loss_name": "MSE",
+    "loss_name": "BCE",
     "method_FT": "domain_adaptation",
+    "loader_factory": get_celeba_train_loader,
+    "val_loader_factory": get_celeba_val_loader,
     "learning_rate": 1e-4,
     "num_epoch": 1
 }
@@ -55,6 +60,8 @@ CONFIG_DOMAINE = {
 CONFIG_LINEAR_PROBING = {
     "loss_name": "MSE",
     "method_FT": "linear_probing",
+    "loader_factory": get_challenge_train_loader,
+    "val_loader_factory": lambda b, n: get_challenge_val_loader(split="val_samp", batch_size=b, num_workers=n),
     "learning_rate": 1e-3,
     "num_epoch": 1
 }
@@ -62,6 +69,8 @@ CONFIG_LINEAR_PROBING = {
 CONFIG_LORA_FT = {
     "loss_name": "MSE",
     "method_FT": "LoRA_Transformer",
+    "loader_factory": get_challenge_train_loader,
+    "val_loader_factory": lambda b, n: get_challenge_val_loader(split="val_samp", batch_size=b, num_workers=n),
     "learning_rate": 1e-4,
     "num_epoch": 1
 }

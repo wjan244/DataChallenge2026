@@ -1,22 +1,18 @@
 import mlflow
 import pandas as pd
-import timm
 import torch 
 import torch.nn as nn
 
 from pathlib import Path
-from torchvision.transforms import v2
 from tqdm import tqdm
 
-from src.config import CHECKPOINT_DIR,HISTORY_DIR, IMG_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS, PATIENCE
-from src.dataset import Dataset
+from src.config import CHECKPOINT_DIR,HISTORY_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS, PATIENCE
 from src.data_utils import get_challenge_split
 from src.models import get_model
-from src.transforms import get_augmentation_transforms
 
 LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss}
 
-def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,precedent_run_id=None,precedent_method=None,prefix:str|None=None)->tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
+def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_loader,precedent_run_id=None,precedent_method=None,prefix:str|None=None,**kwargs)->tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
     """
     Pipe d'entrainement complet du modèle défini dans config.py:
     - extraire les poids du run_train précédent
@@ -50,25 +46,7 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,preceden
     model = get_model(MODEL_NAME, num_classes=1,method=method_FT,weights=weights)
          # -> DEVICE
     model = model.to(DEVICE)
-        # extraire la configuration des données du modèle
-    data_config = timm.data.resolve_model_data_config(model)
-    timm_transform = timm.data.create_transform(**data_config, is_training=False)
-   
-    # dataAugmentation
-        # instantier les augmentations
-    augment_transform = get_augmentation_transforms()
-        # pipeLine Transform (model + augmentation)
-    transform_pipeline = v2.Compose([augment_transform,timm_transform])
-
-    # préparation des données
-        # Data
-    training_set = Dataset(df=df_train,image_dir=IMG_DIR,training=True,transform=transform_pipeline)
-        # DataLoader
-    params_train = {'batch_size': BATCH_SIZE,
-            'shuffle': True,
-            'num_workers': NUM_WORKERS}
-    training_generator = torch.utils.data.DataLoader(training_set, **params_train)
-
+      
     # GD
     loss_fn = LOSS_MAPPING[loss_name]()
         # optimizer
@@ -104,9 +82,9 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,preceden
         print(f"Epoch {n+1}")
         model.train()
         running_loss = 0
-        progress_bar = tqdm(enumerate(training_generator), total=len(training_generator), desc="Entraînement")
+        progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc="Entraînement")
         
-        for batch_idx, (X, y, gender, filename) in progress_bar:
+        for batch_idx, (X, y) in progress_bar:
             # Transfert -> device
             X, y = X.to(DEVICE), y.to(DEVICE)
             y = y.view(-1, 1)
@@ -115,12 +93,6 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,preceden
 
             running_loss += loss.item()
 
-            if loss.isnan():
-                print(filename)
-                print('label', y)
-                print('y_pred', y_pred)
-                break
-
             progress_bar.set_postfix(loss=f"{loss.item():.4f}")
             
             optimizer.zero_grad()
@@ -128,7 +100,7 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,preceden
             optimizer.step()
 
         
-        final_loss = running_loss/len(training_generator)
+        final_loss = running_loss/len(train_loader)
         # métrique mlflow (loss - pas = époque)
         mlflow.log_metric(key="lr",value=scheduler.get_last_lr()[0],step=n)
         mlflow.log_metric(key="loss",value=final_loss,step=n)

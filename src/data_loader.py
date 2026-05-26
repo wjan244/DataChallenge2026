@@ -1,0 +1,94 @@
+import os
+import pandas as pd
+import timm
+
+from pathlib import Path
+from torch.utils.data import DataLoader
+
+from src.config import MODEL_NAME, IMG_DIR
+from src.dataset import Dataset, ChallengeTrain, CelebA
+from src.data_utils import get_challenge_split
+
+
+def get_challenge_train_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
+    """Génère le DataLoader d'entraînement pour le challenge (Format: image, target)."""
+    df_train, _, _, _ = get_challenge_split()
+    
+    # training=True pour activer le facteur d'augmentation *4 et DKL
+    raw_dataset = Dataset(df=df_train, image_dir=IMG_DIR, training=True, transform=None)
+    
+    # applique le wrapper pour train.py
+    standard_dataset = ChallengeTrain(raw_dataset)
+    
+    return DataLoader(standard_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        
+
+def get_celeba_train_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
+    """Génère le DataLoader CelebA d'entraînement en utilisant la classe locale CelebA."""
+    data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
+    transform_pipeline = timm.data.create_transform(**data_config, is_training=True)
+
+    # Utilisation de ta classe locale sur le split entraînement
+    celeba_dataset = CelebA(
+        split="train", 
+        transform=transform_pipeline,
+        path="./data/celeba"
+    )
+    
+    return DataLoader(celeba_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+
+# def get_celeba_train_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
+    
+#     data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
+#     transform_pipeline = timm.data.create_transform(**data_config, is_training=True)
+
+#     raw_celeba = CelebA(root="./data", split="train", target_type="attr", transform=transform_pipeline, download=False)
+#     gender_dataset = CelebAGenderDataset(raw_celeba)
+    
+#     return DataLoader(gender_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+
+
+
+def get_challenge_val_loader(split: str, batch_size: int, num_workers: int = 0) -> DataLoader:
+    
+    _, df_val_raw, df_val_samp, _ = get_challenge_split()
+    df_val = df_val_samp if split == "val_samp" else df_val_raw
+    
+    data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
+    val_transform = timm.data.create_transform(**data_config, is_training=False)
+
+    val_set = Dataset(df_val, IMG_DIR, training=True, transform=val_transform)
+    return DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+def get_celeba_val_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
+    """Génère le DataLoader de validation CelebA en utilisant la classe locale CelebA."""
+    data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
+    val_transform = timm.data.create_transform(**data_config, is_training=False)
+
+    # Utilisation de ta classe locale sur le split validation ("valid")
+    celeba_dataset = CelebA(
+        split="valid", 
+        transform=val_transform,
+        path="./data/celeba"
+    )
+    return DataLoader(celeba_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+# def get_celeba_val_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
+    
+#     data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
+#     val_transform = timm.data.create_transform(**data_config, is_training=False)
+
+#     raw_celeba = CelebA(root="./data", split="valid", target_type="attr", transform=val_transform, download=False)
+#     gender_dataset = CelebAGenderDataset(raw_celeba)
+#     return DataLoader(gender_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+
+
+def get_challenge_test_loader(df_test: pd.DataFrame, batch_size: int, num_workers: int = 0) -> DataLoader:
+
+    data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
+    test_transform = timm.data.create_transform(**data_config, is_training=False)
+
+    test_set = Dataset(df_test, IMG_DIR, training=False, transform=test_transform)
+    
+    return DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)

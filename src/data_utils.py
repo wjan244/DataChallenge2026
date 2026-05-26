@@ -5,40 +5,14 @@ from scipy.stats import beta, entropy
 from sklearn.model_selection import train_test_split
 
 from src.config import CSV_DIR, N_SAMPLE
+from src.data_stats import distribution_adaptation_DKL
 
-bins = np.linspace(0,1,31)
-bin_center = (bins[:-1]+bins[1:])/2
-eps = 1e-6
+
 
 df_train_raw = pd.read_csv(CSV_DIR / "train.csv", delimiter=',')
 df_test_raw = pd.read_csv(CSV_DIR / "test_students.csv", delimiter=',')
 
-def _distribution_adaptation_DKL(n_sample:int,df:pd.DataFrame)->tuple[pd.DataFrame,np.ndarray,np.ndarray]:
-    """
-    - représente la distribution test (cible) en une loi beta (1.5,5)
-    - transforme la distribution train en distribution cible par sampling DKL"""
 
-    # distribution de df
-    train_distribution, _ = np.histogram(df["FaceOcclusion"],bins=30, density=True) 
-    train_distribution = (train_distribution + eps) / (np.sum(train_distribution)+eps)
-
-    # estimation distribution cible (test)
-    test_distribution = beta.pdf(bin_center,a=1.5,b=5) + eps
-    test_distribution = test_distribution/(np.sum(test_distribution)+eps)   # normalisation
-
-    # calcul du ratio de divergence KL
-    ratio_KL = test_distribution / (train_distribution + 1e-6)
-
-    # pondération des occlusion (fonction du ratio KL)
-    bin_categorie = pd.cut(df["FaceOcclusion"],bins=bins,include_lowest=True,ordered=True,labels=False)
-    image_ponderation = ratio_KL[bin_categorie]
-    df['D_KL'] = image_ponderation
-
-    sub_df = df.sample(n=n_sample,weights='D_KL',replace=False,random_state=42)
-
-    sub_df = sub_df.drop(columns=["D_KL"])
-
-    return sub_df, test_distribution, train_distribution
 
 def get_challenge_split()->tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
@@ -57,8 +31,8 @@ def get_challenge_split()->tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Da
     df_val_raw = df_val.reset_index(drop=True).copy()
 
     # adaptation de train et eval à la distribution cible (test)
-    df_train, _ , _ = _distribution_adaptation_DKL(n_sample=N_SAMPLE,df=df_train)
-    df_val_samp, _, _ = _distribution_adaptation_DKL(n_sample=5000,df=df_val)
+    df_train, _ , _ = distribution_adaptation_DKL(n_sample=N_SAMPLE,df=df_train)
+    df_val_samp, _, _ = distribution_adaptation_DKL(n_sample=5000,df=df_val)
 
     return df_train, df_val_raw, df_val_samp, df_test
 
@@ -67,6 +41,10 @@ if __name__ == "__main__":
     #tracé de distribution & calcul de la distance KL asscoiée avec test
     
     import matplotlib.pyplot as plt
+
+    bins = np.linspace(0,1,31)
+    bin_center = (bins[:-1]+bins[1:])/2
+    eps = 1e-6
 
     df_train_sub, df_val_raw, df_val_samp, df_test = get_challenge_split()
 

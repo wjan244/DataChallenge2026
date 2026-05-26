@@ -1,9 +1,15 @@
+import os
+from pathlib import Path
+from typing import Literal
+
 import numpy as np 
+import numpy.typing as npt
 import pandas as pd
 import torch
 
 from PIL import Image
 from torchvision import transforms
+from torchvision.transforms.v2 import Transform
 from typing import Callable, Optional, Union
 
 
@@ -43,3 +49,64 @@ class Dataset(torch.utils.data.Dataset):
             y = None
             gender = None
             return X, filename
+        
+class ChallengeTrain(torch.utils.data.Dataset):
+    def __init__(self, raw_challenge_dataset: Dataset):
+        self.dataset = raw_challenge_dataset
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        X, y, gender, filename = self.dataset[idx]
+        target = torch.tensor([y], dtype=torch.float32) # Shape [1] pour BCE
+        return X, target  
+
+
+class CelebA(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        split: Literal["train", "test", "valid"],
+        transform: Transform | None = None,
+        path: str = "./data/celeba",
+    ):
+        partition = np.loadtxt(os.path.join(path, "Eval", "list_eval_partition.txt"), dtype=str)
+        identity = np.loadtxt(os.path.join(path, "Anno", "identity_CelebA.txt"), dtype=str)
+        attributes = np.loadtxt(os.path.join(path, "Anno", "list_attr_celeba.txt"), dtype=str)
+
+        match split:
+            case "train":
+                flag = 0
+            case "test":
+                flag = 1
+            case "valid":
+                flag = 2
+            case _:
+                raise ValueError(f"Unknown split {split}")
+
+        mask = partition[:, 1].astype(int) == flag
+
+        self.transform = transform
+        self.root = Path(os.path.join(path, "Img"))
+        self.paths: npt.NDArray[np.str_] = partition[mask, 0]
+        self.identities: npt.NDArray[np.int_] = identity[mask, 1].astype(int)
+        self.attr_names: npt.NDArray[np.str_] = attributes[0, 1:]
+        
+        # Identification de l'index de la colonne 'Male' pour extraire la bonne cible binaire
+        male_col_idx = np.where(self.attr_names == "Male")[0][0]
+        self.attributes: npt.NDArray[np.bool_] = attributes[1:, 1:][mask, male_col_idx] == "1"
+
+    def __len__(self):
+        return len(self.paths)
+
+    def __getitem__(self, index: int):
+        path = self.root / self.paths[index]
+        img = Image.open(path).convert('RGB')
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        # Extraction binaire au format float32 attendu par le modèle (0.0 ou 1.0)
+        label = 1.0 if self.attributes[index] else 0.0
+        return img, torch.tensor([label], dtype=torch.float32)
+

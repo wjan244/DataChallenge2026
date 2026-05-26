@@ -5,12 +5,11 @@ import mlflow
 
 from tqdm import tqdm
 
-from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, IMG_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS
-from src.dataset import Dataset
+from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS
 from src.metrics import metric_fn
 from src.models import get_model
 
-def run_evaluation(timestamp,df_val,method_FT,prefix)->None:
+def run_evaluation(timestamp,val_loader,method_FT,prefix)->None:
     """
     Pipe d'évalualtion:
     - inférence du modèle entrainé sur le dataset eval
@@ -35,38 +34,47 @@ def run_evaluation(timestamp,df_val,method_FT,prefix)->None:
     model = model.to(DEVICE)
     model.eval()
 
-    # préparation des données
-    validation_set = Dataset(df_val, IMG_DIR, training=True, transform=val_transform)
+    # gestion de l'adaptation de domaine
+    if method_FT == "domain_adaptation":
+        correct = 0
+        total = 0
+        with torch.inference_mode():
+        
+            for X, y in val_loader:
+                X, y = X.to(DEVICE), y.to(DEVICE)
+                y_pred = model(X)
+                preds = (y_pred > 0.5).float()
+                correct += (preds == y).sum().item()
+                total += y.size(0)
+        
+        score = correct / total
+        metric_name = f"{prefix}_val_acc_gender"
 
-    params_val = {'batch_size': BATCH_SIZE,
-            'shuffle': False,
-            'num_workers': NUM_WORKERS}
-    
-    validation_generator = torch.utils.data.DataLoader(validation_set, **params_val)
+    # gestion du cas général
+    else:
+        results_list = []
+        with torch.inference_mode():
 
-    # inférence
-    results_list = []
-    with torch.inference_mode():
+            progress_bar = tqdm(enumerate(val_loader),total=len(val_loader),desc="validation")
+            for batch_idx, (X, y, gender, filename) in progress_bar:
+                X= X.to(DEVICE)
+                y_pred = model(X)
 
-        progress_bar = tqdm(enumerate(validation_generator),total=len(validation_generator),desc="validation")
-        for batch_idx, (X, y, gender, filename) in progress_bar:
-            X= X.to(DEVICE)
-            y_pred = model(X)
+                for i in range(len(X)):
+                    results_list.append({
+                        'filename': filename[i],
+                        'pred': float(y_pred[i]),
+                        'FaceOcclusion': float(y[i]),
+                        'gender': float(gender[i])
+                    })
+                    
+        results_df = pd.DataFrame(results_list)
 
-            for i in range(len(X)):
-                results_list.append({
-                    'filename': filename[i],
-                    'pred': float(y_pred[i]),
-                    'FaceOcclusion': float(y[i]),
-                    'gender': float(gender[i])
-                })
-                
-    results_df = pd.DataFrame(results_list)
-
-    # evaluation
-    results_male = results_df.loc[results_df["gender"] == 1.0]
-    results_female = results_df.loc[results_df["gender"] == 0.0]
-    score = metric_fn(results_female,results_male)
+        # evaluation
+        results_male = results_df.loc[results_df["gender"] == 1.0]
+        results_female = results_df.loc[results_df["gender"] == 0.0]
+        score = metric_fn(results_female,results_male)
+        metric_name = f"{prefix}_val_score"
 
     # sauvegarde du score dans le journal (en local)
     log_path = HISTORY_DIR / f"{timestamp}_eval_history_{model_tag}.csv"
@@ -84,4 +92,4 @@ def run_evaluation(timestamp,df_val,method_FT,prefix)->None:
     else:
         new_row.to_csv(log_path, index=False)
 
-    mlflow.log_metric(f"{prefix}_val_score",score)
+    mlflow.log_metric(metric_name,score)
