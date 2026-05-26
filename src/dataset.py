@@ -3,6 +3,8 @@ import torch
 from PIL import Image
 from torchvision import transforms
 
+from src.config import AUGMENTATION
+
 
 class Dataset(torch.utils.data.Dataset):
     'Characterizes a dataset for PyTorch'
@@ -12,7 +14,7 @@ class Dataset(torch.utils.data.Dataset):
          self.image_dir = image_dir
          self.df = df
          self.transform = transform if transform else transforms.ToTensor()
-         self.augment_factor = 4 if training else 1
+         self.augment_factor = 4 if (training and AUGMENTATION) else 1
          
     def __len__(self):
         'Denotes the total number of samples'

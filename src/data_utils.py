@@ -5,7 +5,7 @@ from scipy.stats import beta, entropy
 from sklearn.model_selection import train_test_split
 from PIL import Image
 
-from src.config import CSV_DIR, N_SAMPLE, N_BINS
+from src.config import CSV_DIR, N_SAMPLE, N_BINS, SCREENSHOT_PATH
 
 bins = np.linspace(0,1,N_BINS+1)
 bin_center = (bins[:-1]+bins[1:])/2
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     
     import matplotlib.pyplot as plt
 
-    df_train_sub, df_val_raw, df_val_samp, df_test = get_challenge_split(screenshot_path="data/test_distribution.png")
+    df_train_sub, df_val_raw, df_val_samp, df_test = get_challenge_split(screenshot_path=SCREENSHOT_PATH)
     """
     test_distribution = beta.pdf(bin_center, a=1.5, b=5)
     test_distribution = (test_distribution + eps) / (np.sum(test_distribution) + eps)
@@ -150,7 +150,7 @@ if __name__ == "__main__":
     ax.hist(df_train_sub["FaceOcclusion"], bins=N_BINS, weights=df_train_sub["iw"], density=True, alpha=0.5, label="Train repondéré")
 
     # Distribution test (depuis le screenshot)
-    test_dist = _get_test_distribution_from_screenshot("data/test_distribution.png")
+    test_dist = _get_test_distribution_from_screenshot(SCREENSHOT_PATH)
     ax.plot(bin_center, test_dist * N_BINS, color="red", linewidth=2, label="Test (screenshot)")
 
     ax.set_xlabel("Taux d'occlusion")

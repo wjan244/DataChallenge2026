@@ -9,6 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent # pointer directement vers la 
 DATA = BASE_DIR / "data"
 IMG_DIR = DATA / "Crop_224_5fp_100K" 
 CSV_DIR = DATA / "occlusion_datasets"
+SCREENSHOT_PATH = DATA / "test_distribution.png"
 SUBMISSION_DIR = BASE_DIR / "submission"
 
 CHECKPOINT_DIR = BASE_DIR / "checkpoints"
@@ -24,21 +25,22 @@ else:
 
 # -------------------- PARAMETRES --------------------#
 # modèles
-MODEL_NAME = 'mobilenetv3_small_075'
+MODEL_NAME = 'vit_small_patch16_dinov3.lvd1689m'
 
 # hyper paramètres d'entrainement
 LEARNING_RATE = 0.001
-NUM_EPOCH = 1
+NUM_EPOCH = 5
 LOSS_NAME = "MSE"
 
 # hyper-paramètres Dataloader
 BATCH_SIZE = 16
 NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
+AUGMENTATION = False
 
 # fine_tuning - modes d'entrainement
-TRAINING_MODE = None
+TRAINING_MODE = "linear_probing"
 NUM_CLASSES = 1
 
 # distribution des données
-N_SAMPLE = 15000
+N_SAMPLE = 500
 N_BINS = 20

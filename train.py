@@ -7,7 +7,7 @@ import torch.nn as nn
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from src.config import CHECKPOINT_DIR,HISTORY_DIR, IMG_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS, NUM_EPOCH, LEARNING_RATE, LOSS_NAME,TRAINING_MODE
+from src.config import CHECKPOINT_DIR,HISTORY_DIR, IMG_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS, NUM_EPOCH, LEARNING_RATE, LOSS_NAME,TRAINING_MODE, SCREENSHOT_PATH, AUGMENTATION
 from src.dataset import Dataset
 from src.data_utils import get_challenge_split
 from src.models import get_model
@@ -21,7 +21,7 @@ def run_train(timestamp):
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
 
     # load dataframes
-    df_train, df_val_raw, df_val_samp, df_test = get_challenge_split()
+    df_train, df_val_raw, df_val_samp, df_test = get_challenge_split(SCREENSHOT_PATH)
     #df_train, df_val, df_test = get_challenge_split()
 
     # instancier le modèle
@@ -36,7 +36,7 @@ def run_train(timestamp):
         # instantier les augmentations
     augment_transform = get_augmentation_transforms()
         # pipeLine Transform (model + augmentation)
-    transform_pipeline = v2.Compose([augment_transform,timm_transform])
+    transform_pipeline = v2.Compose([augment_transform,timm_transform]) if AUGMENTATION else timm_transform
 
     # préparation des données
         # Data
@@ -139,7 +139,8 @@ def run_train(timestamp):
              
     # sauvegarde des poids sur MLFlow
     model.load_state_dict(torch.load(save_path))
-    mlflow.pytorch.log_model(model,artifact_path=f"{MODEL_NAME}_{TRAINING_MODE}")
+    safe_model_name = MODEL_NAME.replace('.', '_')
+    mlflow.pytorch.log_model(model, artifact_path=f"{safe_model_name}_{TRAINING_MODE}")
 
     return df_val_raw, df_val_samp, df_test
 
