@@ -15,11 +15,11 @@
 
 
 # HELP
-# connect:
+# == Connect ==
 # ssh gpu
 
 # == Interactive session ==
-# srun --partition=3090 --gres=gpu:1 --mem=16G --cpus-per-task=10 --pty bash
+# srun --partition=P100 --gres=gpu:1 --mem=16G --cpus-per-task=10 --pty bash
 # module load cuda/12.9
 # uv sync
 # uv run python main.py
@@ -33,11 +33,12 @@
 echo "=== JOB START ==="
 
 cd ~/DataChallenge2026
+module load cuda/12.9
 uv sync
 # source ~/.bashrc
 source .venv/bin/activate
 
-python main.py
+uv run python main.py
 
 
 echo "=== JOB END ==="
