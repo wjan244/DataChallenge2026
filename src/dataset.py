@@ -1,12 +1,15 @@
 import numpy as np 
+import pandas as pd
 import torch
+
 from PIL import Image
 from torchvision import transforms
+from typing import Callable, Optional, Union
 
 
 class Dataset(torch.utils.data.Dataset):
     'Characterizes a dataset for PyTorch'
-    def __init__(self, df, image_dir, training=True, transform=None):
+    def __init__(self, df:pd.DataFrame, image_dir:str, training:bool=True, transform:Optional[Callable]=None)->None:
          'Initialization'
          self.training = training
          self.image_dir = image_dir
@@ -14,11 +17,11 @@ class Dataset(torch.utils.data.Dataset):
          self.transform = transform if transform else transforms.ToTensor()
          self.augment_factor = 4 if training else 1
          
-    def __len__(self):
+    def __len__(self)->int:
         'Denotes the total number of samples'
         return len(self.df)*self.augment_factor
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx:int)->tuple[torch.Tensor,np.float32,str,str] | tuple[torch.Tensor,str]:
         'Generates one sample of data'
         # Select sample
         real_idx = idx % len(self.df) # forcer l'index à revenir à 0 dès que taille max atteinte (N_SAMPLES)

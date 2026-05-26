@@ -13,7 +13,10 @@ eps = 1e-6
 df_train_raw = pd.read_csv(CSV_DIR / "train.csv", delimiter=',')
 df_test_raw = pd.read_csv(CSV_DIR / "test_students.csv", delimiter=',')
 
-def _distribution_adaptation(n_sample,df):
+def _distribution_adaptation_DKL(n_sample:int,df:pd.DataFrame)->tuple[pd.DataFrame,np.ndarray,np.ndarray]:
+    """
+    - représente la distribution test (cible) en une loi beta (1.5,5)
+    - transforme la distribution train en distribution cible par sampling DKL"""
 
     # distribution de df
     train_distribution, _ = np.histogram(df["FaceOcclusion"],bins=30, density=True) 
@@ -37,7 +40,11 @@ def _distribution_adaptation(n_sample,df):
 
     return sub_df, test_distribution, train_distribution
 
-def get_challenge_split():
+def get_challenge_split()->tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    - transforme la distribution train du dataset -> test (DKL)
+    - split des données train en train/eval
+    """
 
     # Remove nan values
     df_train_clean = df_train_raw.dropna()
@@ -50,8 +57,8 @@ def get_challenge_split():
     df_val_raw = df_val.reset_index(drop=True).copy()
 
     # adaptation de train et eval à la distribution cible (test)
-    df_train, _ , _ = _distribution_adaptation(n_sample=N_SAMPLE,df=df_train)
-    df_val_samp, _, _ = _distribution_adaptation(n_sample=5000,df=df_val)
+    df_train, _ , _ = _distribution_adaptation_DKL(n_sample=N_SAMPLE,df=df_train)
+    df_val_samp, _, _ = _distribution_adaptation_DKL(n_sample=5000,df=df_val)
 
     return df_train, df_val_raw, df_val_samp, df_test
 

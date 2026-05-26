@@ -4,6 +4,7 @@ import timm
 import torch 
 import torch.nn as nn
 
+from pathlib import Path
 from torchvision.transforms import v2
 from tqdm import tqdm
 
@@ -13,19 +14,40 @@ from src.data_utils import get_challenge_split
 from src.models import get_model
 from src.transforms import get_augmentation_transforms
 
+LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss}
 
-def run_train(timestamp):
+def run_train(timestamp,loss_name,method_FT,learning_rate,num_epoch,precedent_run_id=None,precedent_method=None)->tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
+    """
+    Pipe d'entrainement complet du modèle défini dans config.py:
+    - extraire les poids du run_train précédent
+    - instancier le modèle avec les poids du modèle base ou ceux du précédent entrainement
+    - préparer les données
+    - dataAugmentation définie dans src.transforms
+    - backpropagation suivant les paramètres de configuration de config.py
+    - optimisation du learning rate avec un cosine scheduler
+    - sauvegarde des poids/métriques/paramètres en local et sur le Dashboard MLFlow
+    """
 
     # création des dossiers locaux
     CHECKPOINT_DIR.mkdir(parents=True,exist_ok=True)
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
 
+    # attribuer le nom au modèle
+    model_tag = f"{MODEL_NAME}_{method_FT}"
     # load dataframes
     df_train, df_val_raw, df_val_samp, df_test = get_challenge_split()
-    #df_train, df_val, df_test = get_challenge_split()
+    
+    # extraction des poids précédents
+    if precedent_run_id:
+        precedent_tag = f"{MODEL_NAME}_{precedent_method}"
+        weights = mlflow.artifacts.download_artifacts(
+            run_id=precedent_run_id,
+            artifact_path=f"{timestamp}_{precedent_tag}.pt")
+    else:
+        weights = None
 
     # instancier le modèle
-    model = get_model(MODEL_NAME, num_classes=1)
+    model = get_model(MODEL_NAME, num_classes=1,method=method_FT,weights=weights)
          # -> DEVICE
     model = model.to(DEVICE)
         # extraire la configuration des données du modèle
@@ -48,33 +70,30 @@ def run_train(timestamp):
     training_generator = torch.utils.data.DataLoader(training_set, **params_train)
 
     # GD
-        # loss
-    if LOSS_NAME == "MSE":
-        loss_fn = nn.MSELoss()
-    elif LOSS_NAME == "BCE":
-        loss_fn = nn.BCELoss()
+    loss_fn = LOSS_MAPPING[loss_name]()
         # optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         # scheduler 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=NUM_EPOCH,eta_min=0,last_epoch=-1)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=num_epoch,eta_min=0,last_epoch=-1)
 
     # paramétrisatio MLFlow
     hyper_params = {
         "model":MODEL_NAME,
+        "tag": model_tag,
         "learnin_rate" : scheduler.get_last_lr()[0],
-        "num_epoch": NUM_EPOCH,
+        "num_epoch": num_epoch,
         "batch_size": BATCH_SIZE,
         "num_worker": NUM_WORKERS,
-        "loss": LOSS_NAME,
-        "training_mode": TRAINING_MODE
+        "loss": loss_name,
+        "training_mode": method_FT
     }
     mlflow.log_params(hyper_params)
 
     # entrainement
-    save_path = CHECKPOINT_DIR / f"{MODEL_NAME}_{TRAINING_MODE}_{timestamp}.pt"
+    save_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
     best_loss = float('inf')
 
-    for n in range(NUM_EPOCH):
+    for n in range(num_epoch):
         print(f"Epoch {n+1}")
         model.train()
         running_loss = 0
@@ -116,17 +135,18 @@ def run_train(timestamp):
             print(f"modèle sauvegarde en local à l'époque {n+1}")
 
         # sauvegarde loss en local
-        log_path = HISTORY_DIR / f"train_history_loss_{MODEL_NAME}_{TRAINING_MODE}.csv" 
+        log_path = HISTORY_DIR / f"{timestamp}_train_history_loss_{model_tag}.csv" 
         new_row = pd.DataFrame([{
                 "id_run": mlflow.active_run().info.run_id,
                 "date": timestamp,
                 "modèle": MODEL_NAME,
-                "learning_rate": LEARNING_RATE,
+                "tag": model_tag,
+                "learning_rate": learning_rate,
                 "epoch": n+1,
-                "num_epoch": NUM_EPOCH,
-                "loss_name": LOSS_NAME,
+                "num_epoch": num_epoch,
+                "loss_name": loss_name,
                 "batch_size": BATCH_SIZE,
-                "traing_mode": TRAINING_MODE,
+                "traing_mode": method_FT,
                 "final_train_loss": final_loss
             }])   
         
@@ -137,7 +157,10 @@ def run_train(timestamp):
              
     # sauvegarde des poids sur MLFlow
     model.load_state_dict(torch.load(save_path))
-    mlflow.pytorch.log_model(model,artifact_path=f"{MODEL_NAME}_{TRAINING_MODE}")
+    mlflow.log_artifact(local_path=str(save_path))
 
-    return df_val_raw, df_val_samp, df_test
+    # récupérer l'id de run_train (à injeter sur le run_train suivant)
+    run_id = mlflow.active_run().info.run_id
+
+    return run_id, df_val_raw, df_val_samp, df_test,log_path
 

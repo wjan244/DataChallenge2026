@@ -1,27 +1,32 @@
-import argparse
+import mlflow
 import timm
 import torch
 import pandas as pd
 
 from tqdm import tqdm
 
-from src.config import DEVICE,MODEL_NAME,IMG_DIR,HISTORY_DIR,CHECKPOINT_DIR,SUBMISSION_DIR, BATCH_SIZE, NUM_WORKERS, TRAINING_MODE
+from src.config import DEVICE,MODEL_NAME,IMG_DIR,HISTORY_DIR,CHECKPOINT_DIR,SUBMISSION_DIR, BATCH_SIZE, NUM_WORKERS
 from src.models import get_model
 from src.dataset import Dataset
 
-def run_test(timestamp,df_test):
-
+def run_test(timestamp,df_test:pd.DataFrame,method_FT)->None:
+    """
+    Pipe comple de test:
+    - instancie le modèle pré entrainé
+    - préparation des données de test
+    - inférence sur les donées de test
+    - sauvegarde du fichier submission en local et sur le dashbord
+    """
+     # attribuer le nom au modèle
+    model_tag = f"{MODEL_NAME}_{method_FT}"
     # création des dossiers locaux
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
     SUBMISSION_DIR.mkdir(parents=True,exist_ok=True)
 
-    checkpoint_path = CHECKPOINT_DIR / f"{MODEL_NAME}_{TRAINING_MODE}_{timestamp}.pt"
-
-    # Load dataframes
-    #_, _, df_test = get_challenge_split()
+    checkpoint_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
 
      # instanciation du modèle
-    model = get_model(MODEL_NAME, num_classes=1)
+    model = get_model(MODEL_NAME, num_classes=1,method=method_FT)
     data_config = timm.data.resolve_model_data_config(model)
     test_transform = timm.data.create_transform(**data_config, is_training=False)
 
@@ -55,7 +60,11 @@ def run_test(timestamp,df_test):
     results_df = pd.DataFrame(results_list)
 
     # sauvegarde
-    submission_path = SUBMISSION_DIR / f"submission_{MODEL_NAME}_{TRAINING_MODE}_{timestamp}.csv"
+        # sauvegarde en local
+    submission_path = SUBMISSION_DIR / f"{timestamp}_submission_{model_tag}.csv"
     results_df.to_csv(submission_path,index=False)
+        # sauvegarde MLFlow
+    mlflow.log_artifact(local_path=submission_path,artifact_path="submission")
+
 
 

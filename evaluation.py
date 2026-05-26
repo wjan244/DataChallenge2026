@@ -5,23 +5,28 @@ import mlflow
 
 from tqdm import tqdm
 
-from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, IMG_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS, LEARNING_RATE,LOSS_NAME, NUM_EPOCH, TRAINING_MODE
+from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, IMG_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS
 from src.dataset import Dataset
 from src.metrics import metric_fn
 from src.models import get_model
 
-def run_evaluation(timestamp,df_val,prefix):
+def run_evaluation(timestamp,df_val,method_FT,prefix)->None:
+    """
+    Pipe d'évalualtion:
+    - inférence du modèle entrainé sur le dataset eval
+    - calcul du score
+    - sauvegarde du score en local et sur le Dashboard MLFlow
+    """
+    # attribuer le nom au modèle
+    model_tag = f"{MODEL_NAME}_{method_FT}"
 
-    # création des dossiers locaux
+    # création des dossiers locaux et checkpoint_path (dossier d'extraction des poids)
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
     SUBMISSION_DIR.mkdir(parents=True,exist_ok=True)
-    checkpoint_path = CHECKPOINT_DIR / f"{MODEL_NAME}_{TRAINING_MODE}_{timestamp}.pt"
-
-    # load data
-    #_, df_val, _ = get_challenge_split()
+    checkpoint_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
 
     # instanciation du modèle
-    model = get_model(MODEL_NAME, num_classes=1)
+    model = get_model(MODEL_NAME, num_classes=1,method=method_FT)
         # extraire la configuration des données du modèle
     data_config = timm.data.resolve_model_data_config(model)
     val_transform = timm.data.create_transform(**data_config, is_training=False) 
@@ -64,14 +69,13 @@ def run_evaluation(timestamp,df_val,prefix):
     score = metric_fn(results_female,results_male)
 
     # sauvegarde du score dans le journal (en local)
-    log_path = HISTORY_DIR / f"eval_history_{MODEL_NAME}_{TRAINING_MODE}_{timestamp}.csv"
+    log_path = HISTORY_DIR / f"{timestamp}_eval_history_{model_tag}.csv"
 
     new_row = pd.DataFrame([{
+        "id_run": mlflow.active_run().info.run_id,
         "date":timestamp,
         "modèle": MODEL_NAME,
-        "learning_rate": LEARNING_RATE,
-        "num_epoch": NUM_EPOCH,
-        "loss": LOSS_NAME,
+        "method_FT":method_FT,
         "batch_size":BATCH_SIZE,
         "score":score}])
         # ajout de la nouvelle ligne si non existante

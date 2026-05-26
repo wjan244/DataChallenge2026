@@ -1,8 +1,12 @@
 import torch
 
+# from src.config import CONFIG_LORA
 from src.lora import LoRALinear
 
-def inject_linear_probing(model):
+def inject_linear_probing(model:torch.nn.Module)->torch.nn.Module:
+    """exécute un FineTuning de type LinearProbing:
+    - gèle du backbone
+    - dégèle de la tête de classification"""
 
     for params in model.parameters():
         params.requires_grad = False
@@ -12,10 +16,11 @@ def inject_linear_probing(model):
 
     return model
 
-def inject_lora_transformer(model:torch.nn.modules, rank:int, alpha:int, dropout:torch.nn.modules):
+def inject_lora_transformer(model:torch.nn.modules, rank:int, alpha:int, dropout:torch.nn.modules)->torch.nn.Module:
     """
     - capter les q, k, v dans chacune des couches de SSAST
     - remplacer les poids dans chaque couche par les nouveaux poids (w_backbone + w_lora)"""
+    
     # extraction des Q,K,V de chacune des 12 couches
     for name, module in model.named_modules(): 
         if any(target in name for target in ["qkv","query", "key", "value"]):

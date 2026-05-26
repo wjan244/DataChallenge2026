@@ -1,8 +1,8 @@
 from torchvision.transforms import v2
 
-def get_augmentation_transforms():
-    """défini le transform de data_augmentation avec les transformation
-    de base appelée de manière composée et/ou aléatoire:
+def get_augmentation_transforms()->None:
+    """défini le transform de data_augmentation avec les transformations
+    de base appelées de manière composée et/ou aléatoire:
     - RandomRotation
     - HorizontalFlip
     - ColorJitter (constraste et luminosité)

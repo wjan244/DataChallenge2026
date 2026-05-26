@@ -24,7 +24,7 @@ else:
 
 # -------------------- PARAMETRES --------------------#
 # modèles
-MODEL_NAME = 'beit3_base_patch16_224'
+MODEL_NAME = 'vit_tiny_patch16_224'
 # exemples:
 # 'beit3_base_patch16_224'
 # 'mobilenetv3_small_075'
@@ -39,12 +39,33 @@ NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') e
 
 # fine_tuning - modes d'entrainement
       # methode
-TRAINING_MODE = "LoRA_Transformer"
+# TRAINING_MODE = "LoRA_Transformer"
 NUM_CLASSES = 1
       # LoRA
-RANK = 6
-ALPHA = 16
-DROPOUT = 0.05
+RANK = 1
+ALPHA = 1
+DROPOUT = 0
 
 # distribution des données
 N_SAMPLE = 20000
+
+CONFIG_DOMAINE = {
+    "loss_name": "MSE",
+    "method_FT": "domain_adaptation",
+    "learning_rate": 1e-4,
+    "num_epoch": 1
+}
+
+CONFIG_LINEAR_PROBING = {
+    "loss_name": "MSE",
+    "method_FT": "linear_probing",
+    "learning_rate": 1e-3,
+    "num_epoch": 1
+}
+
+CONFIG_LORA_FT = {
+    "loss_name": "MSE",
+    "method_FT": "LoRA_Transformer",
+    "learning_rate": 1e-4,
+    "num_epoch": 1
+}

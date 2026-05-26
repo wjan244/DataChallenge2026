@@ -3,6 +3,11 @@ from torch import nn
 
 
 class LoRALinear(nn.Module):
+  """
+  Encapsule une couche linéaire gelée et ajoute des matrices
+  de mise à jour de rang inférieur (A et B) entraînables pour le finetuning.
+  """
+  
   def __init__(
     self,
     in_dim: int,
@@ -10,7 +15,7 @@ class LoRALinear(nn.Module):
     rank: int,
     alpha: float,
     dropout: float
-  ):
+  )->None:
     
     super().__init__()
     
