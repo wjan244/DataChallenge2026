@@ -28,6 +28,7 @@
 # sbatch scripts/run_cluster.sbatch # copy the job number
 # tail -f logs/831118.out
 # squeue -j 831118
+
 # rsync -vr DataChallenge2026.zip name@xxx:/home/infres/cmergny-25/DataChallenge2026/data
 
 # == Debug ==
