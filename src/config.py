@@ -35,7 +35,7 @@ MODEL_NAME = 'vit_small_patch14_reg4_dinov2.lvd142m'
 PATIENCE = 5
 
 # hyper-paramètres Dataloader
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
 NUM_CLASSES = 1
 
