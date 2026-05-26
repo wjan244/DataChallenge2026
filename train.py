@@ -16,7 +16,7 @@ from src.transforms import get_augmentation_transforms
 
 LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss}
 
-def run_train(timestamp,loss_name,method_FT,learning_rate,num_epoch,precedent_run_id=None,precedent_method=None)->tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
+def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,precedent_run_id=None,precedent_method=None,prefix:str|None=None)->tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
     """
     Pipe d'entrainement complet du modèle défini dans config.py:
     - extraire les poids du run_train précédent
@@ -85,7 +85,9 @@ def run_train(timestamp,loss_name,method_FT,learning_rate,num_epoch,precedent_ru
         "batch_size": BATCH_SIZE,
         "num_worker": NUM_WORKERS,
         "loss": loss_name,
-        "training_mode": method_FT
+        "training_mode": method_FT,
+        "time_stamp":timestamp,
+        "prefix":prefix
     }
     mlflow.log_params(hyper_params)
 
@@ -132,7 +134,7 @@ def run_train(timestamp,loss_name,method_FT,learning_rate,num_epoch,precedent_ru
         if final_loss < best_loss:
             best_loss = final_loss
             torch.save(model.state_dict(), save_path)
-            print(f"modèle sauvegarde en local à l'époque {n+1}")
+            print(f"modèle sauvegarde à l'époque {n+1}")
 
         # sauvegarde loss en local
         log_path = HISTORY_DIR / f"{timestamp}_train_history_loss_{model_tag}.csv" 
