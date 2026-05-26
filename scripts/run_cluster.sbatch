@@ -3,7 +3,7 @@
 #SBATCH --time=20:00:00
 #SBATCH --cpus-per-task=10 # nber of env = #cpus - 2 (main process + OS)
 #SBATCH --ntasks=1
-#SBATCH --mem=40g # 4GB /env
+#SBATCH --mem=40G # 4GB /env
 ##SBATCH --partition 3090
 ##SBATCH --partition P100
 #SBATCH --gpus 1 # SQAC uses only one GPU for a MLP
@@ -17,7 +17,8 @@
 # HELP
 # connect:
 
-# sinteractive --gpus 1 --mem 40 --cpus-per-task 10 --time 10:00:00 --partition 3090
+# sinteractive --gpus 1 --mem=40G --cpus-per-task 10 --time 10:00:00 --partition 3090
+# srun --partition=3090 --gres=gpu:1 --mem=16G --cpus-per-task=10 --pty bash
 # sbatch scripts/run_cluster.sbatch
 # tail -f logs/831118.out
 # squeue -j 831118
