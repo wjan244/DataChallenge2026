@@ -5,13 +5,13 @@
 #SBATCH --ntasks=1
 #SBATCH --mem=64G 
 ##SBATCH --partition 3090
-##SBATCH --partition P100
-#SBATCH --gpus 2
+#SBATCH --partition P100
+#SBATCH --gpus 1
 
 #SBATCH --acctg-freq=task=10
 #SBATCH --job-name=test
-#SBATCH --error=logs/%j.out
-#SBATCH --out=logs/%j.out
+#SBATCH --error=logs/%j.err
+#SBATCH --output=logs/%j.log
 
 
 # HELP
