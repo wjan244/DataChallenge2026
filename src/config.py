@@ -26,7 +26,7 @@ else:
 N_SAMPLE = 20000
 
 # Hyper-paramètres entrainement
-MODEL_NAME = 'vit_tiny_patch16_224'
+MODEL_NAME = 'beit3_base_patch16_224'
 
                   # exemples:
                   # 'beit3_base_patch16_224'
@@ -35,14 +35,14 @@ MODEL_NAME = 'vit_tiny_patch16_224'
 PATIENCE = 5
 
 # hyper-paramètres Dataloader
-BATCH_SIZE = 16
+BATCH_SIZE = 64
 NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
 NUM_CLASSES = 1
 
 # Hyper-paramètres LoRA
-RANK = 1
-ALPHA = 1
-DROPOUT = 0
+RANK = 8
+ALPHA = 16
+DROPOUT = 0.05
 
 from src.data_loader import (get_challenge_train_loader,get_celeba_train_loader, 
                              get_celeba_val_loader, get_challenge_val_loader)
@@ -53,8 +53,8 @@ CONFIG_DOMAINE = {
     "method_FT": "domain_adaptation",
     "loader_factory": get_celeba_train_loader,
     "val_loader_factory": get_celeba_val_loader,
-    "learning_rate": 1e-4,
-    "num_epoch": 1
+    "learning_rate": 2e-5,
+    "num_epoch": 5
 }
 
 CONFIG_LINEAR_PROBING = {
@@ -63,7 +63,7 @@ CONFIG_LINEAR_PROBING = {
     "loader_factory": get_challenge_train_loader,
     "val_loader_factory": lambda b, n: get_challenge_val_loader(split="val_samp", batch_size=b, num_workers=n),
     "learning_rate": 1e-3,
-    "num_epoch": 1
+    "num_epoch": 15
 }
 
 CONFIG_LORA_FT = {
@@ -71,6 +71,6 @@ CONFIG_LORA_FT = {
     "method_FT": "LoRA_Transformer",
     "loader_factory": get_challenge_train_loader,
     "val_loader_factory": lambda b, n: get_challenge_val_loader(split="val_samp", batch_size=b, num_workers=n),
-    "learning_rate": 1e-4,
-    "num_epoch": 1
+    "learning_rate": 2e-4,
+    "num_epoch": 20
 }
