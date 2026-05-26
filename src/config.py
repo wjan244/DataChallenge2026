@@ -22,33 +22,28 @@ elif torch.cuda.is_available():
 else:
       DEVICE = torch.device("cpu")
 
-# -------------------- PARAMETRES --------------------#
+# distribution des données
+N_SAMPLE = 20000
+
 # modèles
 MODEL_NAME = 'vit_tiny_patch16_224'
-# exemples:
-# 'beit3_base_patch16_224'
-# 'mobilenetv3_small_075'
-# hyper paramètres d'entrainement
-LEARNING_RATE = 0.001
-NUM_EPOCH = 1
-LOSS_NAME = "MSE"
+
+                  # exemples:
+                  # 'beit3_base_patch16_224'
+                  # 'mobilenetv3_small_075'
+                  # hyper paramètres d'entrainement
 
 # hyper-paramètres Dataloader
 BATCH_SIZE = 16
 NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
-
-# fine_tuning - modes d'entrainement
-      # methode
-# TRAINING_MODE = "LoRA_Transformer"
 NUM_CLASSES = 1
-      # LoRA
+
+# Hyper-paramètres LoRA
 RANK = 1
 ALPHA = 1
 DROPOUT = 0
 
-# distribution des données
-N_SAMPLE = 20000
-
+# configuration des méthodes de Fine_Tuning
 CONFIG_DOMAINE = {
     "loss_name": "MSE",
     "method_FT": "domain_adaptation",

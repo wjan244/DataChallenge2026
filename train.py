@@ -8,7 +8,7 @@ from pathlib import Path
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-from src.config import CHECKPOINT_DIR,HISTORY_DIR, IMG_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS, NUM_EPOCH, LEARNING_RATE, LOSS_NAME,TRAINING_MODE
+from src.config import CHECKPOINT_DIR,HISTORY_DIR, IMG_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS
 from src.dataset import Dataset
 from src.data_utils import get_challenge_split
 from src.models import get_model

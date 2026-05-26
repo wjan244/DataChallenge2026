@@ -1,6 +1,5 @@
 import torch
 
-# from src.config import CONFIG_LORA
 from src.lora import LoRALinear
 
 def inject_linear_probing(model:torch.nn.Module)->torch.nn.Module:
