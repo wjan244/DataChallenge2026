@@ -26,7 +26,7 @@ else:
 N_SAMPLE = 20000
 
 # Hyper-paramètres entrainement
-MODEL_NAME = 'dinov2_vits14'
+MODEL_NAME = 'vit_small_patch14_reg4_dinov2.lvd142m'
 
                   # exemples:
                   # 'beit3_base_patch16_224'
