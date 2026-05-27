@@ -61,7 +61,7 @@ class ChallengeTrain(torch.utils.data.Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        X, y, gender, filename = self.dataset[idx]
+        X, y, gender, filename, *_ = self.dataset[idx]
         target = torch.tensor([y], dtype=torch.float32) # Shape [1] pour BCE
         return X, target  
 

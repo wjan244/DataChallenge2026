@@ -1,3 +1,5 @@
+import os
+
 from pathlib import Path
 
 import torch
@@ -28,3 +30,7 @@ N_SAMPLE = 20000
 
 N_SAMPLE = 500
 N_BINS = 20
+NUM_CLASSES = 1
+
+
+NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()

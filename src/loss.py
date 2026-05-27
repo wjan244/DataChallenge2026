@@ -6,7 +6,6 @@ class WeightedMSELoss(nn.Module):
         super().__init__()
 
     def forward(self, y_pred, y_true, iw=None):
-        # Si aucun iw n'est fourni, on applique des 1 (comportement MSE classique)
         if iw is None:
             iw = torch.ones_like(y_true)
         return (iw * (y_pred - y_true) ** 2).mean()

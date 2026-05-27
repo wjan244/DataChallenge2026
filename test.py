@@ -5,8 +5,9 @@ import pandas as pd
 
 from tqdm import tqdm
 
-from src.config import DEVICE,MODEL_NAME,HISTORY_DIR,CHECKPOINT_DIR,SUBMISSION_DIR
+from src.config import MODEL_NAME
 from src.models import get_model
+from src.path import*
 
 
 def run_test(timestamp,test_loader,method_FT)->None:
@@ -27,8 +28,8 @@ def run_test(timestamp,test_loader,method_FT)->None:
 
      # instanciation du modèle
     model = get_model(MODEL_NAME, num_classes=1,method=method_FT)
-    data_config = timm.data.resolve_model_data_config(model)
-    test_transform = timm.data.create_transform(**data_config, is_training=False)
+    # data_config = timm.data.resolve_model_data_config(model)
+    # test_transform = timm.data.create_transform(**data_config, is_training=False)
 
     model.load_state_dict(torch.load(checkpoint_path,map_location=DEVICE))
     model = model.to(DEVICE)
@@ -39,7 +40,7 @@ def run_test(timestamp,test_loader,method_FT)->None:
     with torch.inference_mode():
 
         progress_bar = tqdm(enumerate(test_loader),total=len(test_loader),desc="test")
-        for batch_idx, (X, filename) in progress_bar:
+        for batch_idx, (X, *_, filename) in progress_bar:
             # Transfer -> device
             X = X.to(DEVICE)
             y_pred = model(X)

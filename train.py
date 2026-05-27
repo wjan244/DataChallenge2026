@@ -6,7 +6,7 @@ import torch.nn as nn
 from pathlib import Path
 from tqdm import tqdm
 
-from src.config import MODEL_NAME, BATCH_SIZE, NUM_WORKERS, PATIENCE, AUGMENTATION
+from src.config import MODEL_NAME, BATCH_SIZE,PATIENCE,AUGMENTATION
 from src.data_utils import get_challenge_split
 from src.loss import WeightedMSELoss, UniversalLossWrapper
 from src.metrics import metric_fn
@@ -69,7 +69,8 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
         "loss": loss_name,
         "training_mode": method_FT,
         "time_stamp":timestamp,
-        "prefix":prefix
+        "prefix":prefix,
+        "data_augmentation":AUGMENTATION
     }
     mlflow.log_params(hyper_params)
 
