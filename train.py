@@ -6,12 +6,14 @@ import torch.nn as nn
 from pathlib import Path
 from tqdm import tqdm
 
-from src.config import CHECKPOINT_DIR,HISTORY_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS, PATIENCE
+from src.config import MODEL_NAME, BATCH_SIZE, NUM_WORKERS, PATIENCE, AUGMENTATION
 from src.data_utils import get_challenge_split
+from src.loss import WeightedMSELoss, UniversalLossWrapper
 from src.metrics import metric_fn
 from src.models import get_model
+from src.path import *
 
-LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss}
+LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss}
 
 def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_loader,val_loader,precedent_run_id=None,precedent_method=None,prefix:str|None=None,**kwargs)->tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
     """
@@ -49,7 +51,8 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
     model = model.to(DEVICE)
       
     # GD
-    loss_fn = LOSS_MAPPING[loss_name]()
+    base_loss = LOSS_MAPPING[loss_name]()
+    loss_fn = UniversalLossWrapper(base_loss)
         # optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         # scheduler 
@@ -85,21 +88,21 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
         running_loss = 0
         progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc="Entraînement")
         
-        for batch_idx, (X, y) in progress_bar:
-            # Transfert -> device
-            X, y = X.to(DEVICE), y.to(DEVICE)
-            y = y.view(-1, 1)
+        for batch_idx, batch in progress_bar:
+            X, y = batch[0].to(DEVICE), batch[1].to(DEVICE).view(-1, 1)
+            
+            #uniquement pour Dataset Challenge
+            iw = batch[4].to(DEVICE).view(-1, 1) if len(batch) == 5 else None
+            
             y_pred = model(X)
-            loss = loss_fn(y_pred, y)
+            loss = loss_fn(y_pred, y, iw)
 
             running_loss += loss.item()
-
             progress_bar.set_postfix(loss=f"{loss.item():.4f}")
             
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
         
         final_loss = running_loss/len(train_loader)
 
@@ -108,18 +111,12 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
         val_loss = 0
         with torch.inference_mode(): 
             for batch in val_loader:
-                # gestion dynamique selon le dataset (CelebA vs Challenge)
-                if len(batch) == 2:
-                    X_val, y_val = batch
-                    gender_val = None
-                else:
-                    X_val, y_val, gender_val, _ = batch
-
-                X_val, y_val = X_val.to(DEVICE), y_val.to(DEVICE)
-                y_val = y_val.view(-1, 1)
+                
+                X_val, y_val = batch[0].to(DEVICE), batch[1].to(DEVICE).view(-1, 1)
+                iw_val = batch[4].to(DEVICE).view(-1, 1) if len(batch) == 5 else None
                 
                 y_pred_val = model(X_val)
-                loss_v = loss_fn(y_pred_val, y_val)
+                loss_v = loss_fn(y_pred_val, y_val, iw_val)
                 val_loss += loss_v.item()
 
         final_val_loss = val_loss / len(val_loader)

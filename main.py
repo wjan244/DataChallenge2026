@@ -10,7 +10,6 @@ from evaluation import run_evaluation
 from src.config import MODEL_NAME, CONFIG_DOMAINE, CONFIG_LINEAR_PROBING, CONFIG_LORA_FT, BATCH_SIZE, NUM_WORKERS
 from src.data_loader import get_challenge_test_loader
 from test import run_test
-#from time import time
 from train import run_train
 
 

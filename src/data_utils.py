@@ -1,100 +1,108 @@
 import numpy as np
 import pandas as pd
 
-from scipy.stats import beta, entropy
+from scipy.stats import entropy
 from sklearn.model_selection import train_test_split
+from PIL import Image
+from src.path import *
+from src.data_stats import distribution_adaptation_reweight, get_test_distribution_from_screenshot
 
-from src.config import CSV_DIR, N_SAMPLE
-from src.data_stats import distribution_adaptation_DKL
 
-
+bins = np.linspace(0,1,N_BINS+1)
+bin_center = (bins[:-1]+bins[1:])/2
+eps = 1e-6
 
 df_train_raw = pd.read_csv(CSV_DIR / "train.csv", delimiter=',')
 df_test_raw = pd.read_csv(CSV_DIR / "test_students.csv", delimiter=',')
 
 
 
-def get_challenge_split()->tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def get_challenge_split(screenshot_path=SCREENSHOT_PATH):
     """
-    - transforme la distribution train du dataset -> test (DKL)
-    - split des données train en train/eval
+    Pipeline principal : Nettoie les données, effectue le split train/validation 
+    et adapte les distributions via la méthode de tracé par capture d'écran.
     """
-
-    # Remove nan values
     df_train_clean = df_train_raw.dropna()
     df_test = df_test_raw.dropna().reset_index(drop=True)
 
-    # split train et val_samp
-    df_train, df_val = train_test_split(df_train_clean,test_size=0.2,random_state=42,shuffle=True)
-
+    # split initial stratifié de manière aléatoire (80% Train, 20% Eval)
+    df_train, df_val = train_test_split(df_train_clean, test_size=0.2, random_state=42, shuffle=True)
     df_train = df_train.reset_index(drop=True)
     df_val_raw = df_val.reset_index(drop=True).copy()
 
-    # adaptation de train et eval à la distribution cible (test)
-    df_train, _ , _ = distribution_adaptation_DKL(n_sample=N_SAMPLE,df=df_train)
-    df_val_samp, _, _ = distribution_adaptation_DKL(n_sample=5000,df=df_val)
+    # extraction de la vraie distribution depuis l'image
+    test_dist = get_test_distribution_from_screenshot(screenshot_path)
+    
+    n = len(df_train) if screenshot_path else N_SAMPLE
+    n_val = len(df_val) if screenshot_path else 5000
+    
+    # application de l'adaptation de domaine sur le train et la validation
+    df_train_sub, _, _ = distribution_adaptation_reweight(n_sample=n, df=df_train, test_distribution=test_dist)
+    df_val_samp, _, _ = distribution_adaptation_reweight(n_sample=n_val, df=df_val, test_distribution=test_dist)
 
-    return df_train, df_val_raw, df_val_samp, df_test
+    return df_train_sub, df_val_raw, df_val_samp, df_test
 
 
 if __name__ == "__main__":
-    #tracé de distribution & calcul de la distance KL asscoiée avec test
-    
     import matplotlib.pyplot as plt
 
-    bins = np.linspace(0,1,31)
-    bin_center = (bins[:-1]+bins[1:])/2
-    eps = 1e-6
+    # Génération du split de données adapté via l'image
+    df_train_sub, df_val_raw, df_val_samp, df_test = get_challenge_split(screenshot_path=SCREENSHOT_PATH)
 
-    df_train_sub, df_val_raw, df_val_samp, df_test = get_challenge_split()
+    # Récupération de la distribution cible de référence
+    test_distribution = get_test_distribution_from_screenshot(SCREENSHOT_PATH)
 
-    test_distribution = beta.pdf(bin_center, a=1.5, b=5)
-    test_distribution = (test_distribution + eps) / (np.sum(test_distribution) + eps)
-
-    # distribution
-        # train
-    train_distribution, _ = np.histogram(df_train_raw["FaceOcclusion"],bins=30, density=True) 
-    train_distribution = (train_distribution + eps) / (np.sum(train_distribution)+eps)
-        # train échantillonné
-    train_sub_distribution, _ = np.histogram(df_train_sub["FaceOcclusion"], density=True, bins=bins)
+    # Calcul des histogrammes réels de contrôle
+    train_distribution, _ = np.histogram(df_train_raw["FaceOcclusion"], bins=N_BINS, density=True) 
+    train_distribution = (train_distribution + eps) / (np.sum(train_distribution) + eps)
+    
+    train_sub_distribution, _ = np.histogram(df_train_sub["FaceOcclusion"], bins=bins, density=True)
     train_sub_distribution = (train_sub_distribution + eps) / (np.sum(train_sub_distribution) + eps)
 
-        # raw_eval
     val_raw_distribution, _ = np.histogram(df_val_raw["FaceOcclusion"], bins=bins, density=True)
     val_raw_distribution = (val_raw_distribution + eps) / (np.sum(val_raw_distribution) + eps)
 
-        # eval_samp
     val_samp_distribution, _ = np.histogram(df_val_samp["FaceOcclusion"], bins=bins, density=True)
     val_samp_distribution = (val_samp_distribution + eps) / (np.sum(val_samp_distribution) + eps)
 
-    #  divergences KL
-    DKL_train_test = entropy(test_distribution,train_distribution,base=None)
-    DKL_subtrain_test = entropy(test_distribution, train_sub_distribution,base=None)
-    DKL_valraw_test = entropy(test_distribution, val_raw_distribution,base=None)
-    DKL_valsamp_test = entropy(test_distribution, val_samp_distribution,base=None)
+    # Calcul des métriques de divergence KL finales
+    DKL_train_test = entropy(test_distribution, train_distribution)
+    DKL_subtrain_test = entropy(test_distribution, train_sub_distribution)
+    DKL_valraw_test = entropy(test_distribution, val_raw_distribution)
+    DKL_valsamp_test = entropy(test_distribution, val_samp_distribution)
 
-    # Tracé
+    # TRACÉ 1 : Analyse comparative de la réduction de divergence globale
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
-    ax1.plot(bin_center, test_distribution, label="Test (Beta)", color="red", linewidth=2)
-    ax1.bar(bin_center, train_sub_distribution, width=0.03, alpha=0.5, label=f"Train échantillonné Dkl = {DKL_subtrain_test:.3f}", color="blue")
-    ax1.bar(bin_center, train_distribution, width=0.03, alpha=0.5, label=f"Train raw DKL = {DKL_train_test:.3f}", color="green")
+    # Diagnostic Train
+    ax1.plot(bin_center, test_distribution, label="Cible (Screenshot)", color="red", linewidth=2)
+    ax1.bar(bin_center, train_sub_distribution, width=0.03, alpha=0.5, label=f"Train adapté (DKL = {DKL_subtrain_test:.3f})", color="blue")
+    ax1.bar(bin_center, train_distribution, width=0.03, alpha=0.5, label=f"Train initial (DKL = {DKL_train_test:.3f})", color="green")
     ax1.set_xlabel("Taux d'occlusion")
-    ax1.set_title("Transformation de train")
+    ax1.set_title("Adaptation du jeu d'entraînement")
     ax1.legend()
 
-    ax2.plot(bin_center, test_distribution, label="Test (Beta)", color="red", linewidth=2)
-    ax2.bar(bin_center, val_samp_distribution, width=0.03, alpha=0.5, label=f"Eval échantillonné DKL = {DKL_valsamp_test:.3f}", color="blue")
-    ax2.bar(bin_center, val_raw_distribution, width=0.03, alpha=0.5, label=f"Eval raw DKL = {DKL_valraw_test:.3f}", color="orange")
+    # Diagnostic Validation
+    ax2.plot(bin_center, test_distribution, label="Cible (Screenshot)", color="red", linewidth=2)
+    ax2.bar(bin_center, val_samp_distribution, width=0.03, alpha=0.5, label=f"Eval adaptée (DKL = {DKL_valsamp_test:.3f})", color="blue")
+    ax2.bar(bin_center, val_raw_distribution, width=0.03, alpha=0.5, label=f"Eval brute (DKL = {DKL_valraw_test:.3f})", color="orange")
     ax2.set_xlabel("Taux d'occlusion")
-    ax2.set_title("Transformation de eval")
+    ax2.set_title("Adaptation du jeu de validation")
     ax2.legend()
 
     plt.tight_layout()
     plt.show()
 
+    # TRACÉ 2 : Visualisation de l'impact des Importance Weights (iw)
+    fig, ax = plt.subplots(figsize=(10, 5))
 
+    ax.hist(df_train_raw["FaceOcclusion"], bins=N_BINS, density=True, alpha=0.4, label="Train initial (brut)", color="green")
+    
+    if "iw" in df_train_sub.columns:
+        ax.hist(df_train_sub["FaceOcclusion"], bins=N_BINS, weights=df_train_sub["iw"], density=True, alpha=0.5, label="Train rééquilibré (Poids iw)", color="blue")
 
-
-
-
+    ax.plot(bin_center, test_distribution * N_BINS, color="red", linewidth=2, label="Densité cible (Screenshot)")
+    ax.set_xlabel("Taux d'occlusion")
+    ax.set_title("Impact de la repondération sur le domaine cible")
+    ax.legend()
+    plt.show()

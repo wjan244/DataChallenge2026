@@ -5,8 +5,9 @@ import timm
 from pathlib import Path
 from torch.utils.data import DataLoader
 
-from src.config import MODEL_NAME, IMG_DIR
+from src.config import MODEL_NAME
 from src.dataset import Dataset, ChallengeTrain, CelebA
+from src.path import *
 from src.data_utils import get_challenge_split
 
 
@@ -37,17 +38,6 @@ def get_celeba_train_loader(batch_size: int, num_workers: int = 0) -> DataLoader
     
     return DataLoader(celeba_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
-# def get_celeba_train_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
-    
-#     data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
-#     transform_pipeline = timm.data.create_transform(**data_config, is_training=True)
-
-#     raw_celeba = CelebA(root="./data", split="train", target_type="attr", transform=transform_pipeline, download=False)
-#     gender_dataset = CelebAGenderDataset(raw_celeba)
-    
-#     return DataLoader(gender_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-
-
 
 def get_challenge_val_loader(split: str, batch_size: int, num_workers: int = 0) -> DataLoader:
     
@@ -72,16 +62,6 @@ def get_celeba_val_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
         path="./data/celeba"
     )
     return DataLoader(celeba_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-
-# def get_celeba_val_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
-    
-#     data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
-#     val_transform = timm.data.create_transform(**data_config, is_training=False)
-
-#     raw_celeba = CelebA(root="./data", split="valid", target_type="attr", transform=val_transform, download=False)
-#     gender_dataset = CelebAGenderDataset(raw_celeba)
-#     return DataLoader(gender_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
-
 
 
 def get_challenge_test_loader(df_test: pd.DataFrame, batch_size: int, num_workers: int = 0) -> DataLoader:

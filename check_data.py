@@ -1,7 +1,7 @@
 from PIL import Image
 from tqdm import tqdm
 
-from src.config import IMG_DIR
+from src.path import *
 from src.data_utils import get_challenge_split
 
 if __name__ == "__main__":

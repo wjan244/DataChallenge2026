@@ -5,7 +5,8 @@ import mlflow
 
 from tqdm import tqdm
 
-from src.config import DEVICE, HISTORY_DIR,SUBMISSION_DIR, MODEL_NAME, CHECKPOINT_DIR, BATCH_SIZE, NUM_WORKERS
+from src.config import MODEL_NAME, BATCH_SIZE
+from src.path import *
 from src.metrics import metric_fn
 from src.models import get_model
 

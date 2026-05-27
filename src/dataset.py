@@ -13,15 +13,17 @@ from torchvision.transforms.v2 import Transform
 from typing import Callable, Optional, Union
 
 
+
 class Dataset(torch.utils.data.Dataset):
     'Characterizes a dataset for PyTorch'
     def __init__(self, df:pd.DataFrame, image_dir:str, training:bool=True, transform:Optional[Callable]=None)->None:
          'Initialization'
+         from src.config import AUGMENTATION
          self.training = training
          self.image_dir = image_dir
          self.df = df
          self.transform = transform if transform else transforms.ToTensor()
-         self.augment_factor = 4 if training else 1
+         self.augment_factor = 4 if (training and AUGMENTATION) else 1
          
     def __len__(self)->int:
         'Denotes the total number of samples'
@@ -44,7 +46,8 @@ class Dataset(torch.utils.data.Dataset):
             y = row['FaceOcclusion']
             y = np.float32(y)
             gender = row['gender']
-            return X, y, gender, filename
+            iw = np.float32(row['iw']) if 'iw' in self.df.columns else np.float32(1.0)
+            return X, y, gender, filename, iw
         else:
             y = None
             gender = None
