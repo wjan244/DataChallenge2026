@@ -43,7 +43,7 @@ def inject_lora_transformer(model:torch.nn.modules, rank:int, alpha:int, dropout
                 bias=has_bias
             )
             
-            # Transfert des poids du Linear Probing vers la partie fixe de LoRA
+            # transfert des poids du Linear Probing vers la partie fixe de LoRA
             new_layer.linear.weight.data = old_layer.weight.data.clone()
             # gestion des biais absents
             if has_bias:

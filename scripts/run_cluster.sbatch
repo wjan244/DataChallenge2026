@@ -26,7 +26,7 @@
 
 #== Run jobs ==
 # sbatch scripts/run_cluster.sbatch # copy the job number
-# tail -f logs/834242.log
+# tail -f logs/834388.log
 # squeue -j 834135
 # squeue -p 834135
 # cat logs/834135.log
@@ -58,4 +58,4 @@ echo "=== JOB END ==="
 echo "timestamp: $(date -Is)"
 
 # scancel 834049 -> arrêter je job
-# sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 -> voir tous les jobs actifs
+# sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 --state=RUNNING,PENDING -> voir tous les jobs actifs
