@@ -12,7 +12,7 @@ from src.models import get_model
 
 LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss}
 
-def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_loader,precedent_run_id=None,precedent_method=None,prefix:str|None=None,**kwargs)->tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
+def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_loader,val_loader,precedent_run_id=None,precedent_method=None,prefix:str|None=None,**kwargs)->tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
     """
     Pipe d'entrainement complet du modèle défini dans config.py:
     - extraire les poids du run_train précédent
@@ -23,15 +23,15 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
     - optimisation du learning rate avec un cosine scheduler
     - sauvegarde des poids/métriques/paramètres en local et sur le Dashboard MLFlow
     """
-
+   
     # création des dossiers locaux
     CHECKPOINT_DIR.mkdir(parents=True,exist_ok=True)
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
 
     # attribuer le nom au modèle
     model_tag = f"{MODEL_NAME}_{method_FT}"
-    # load dataframes
-    df_train, df_val_raw, df_val_samp, df_test = get_challenge_split()
+    # # load dataframes
+    _, df_val_raw, df_val_samp, df_test = get_challenge_split()
     
     # extraction des poids précédents
     if precedent_run_id:
@@ -101,20 +101,37 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
 
         
         final_loss = running_loss/len(train_loader)
-        # métrique mlflow (loss - pas = époque)
-        mlflow.log_metric(key="lr",value=scheduler.get_last_lr()[0],step=n)
-        mlflow.log_metric(key="loss",value=final_loss,step=n)
+
+        # boucle d'évaluation
+        model.eval()
+        val_loss = 0
+        with torch.inference_mode(): 
+            for X_val, y_val in val_loader:
+                X_val, y_val = X_val.to(DEVICE), y_val.to(DEVICE)
+                y_val = y_val.view(-1, 1)
+                
+                y_pred_val = model(X_val)
+                loss_v = loss_fn(y_pred_val, y_val)
+                val_loss += loss_v.item()
+
+        final_val_loss = val_loss / len(val_loader)
+        
+        # enregistrement des métriques sur MLflow
+        mlflow.log_metric(key="lr", value=scheduler.get_last_lr()[0], step=n)
+        mlflow.log_metric(key="train_loss", value=final_loss, step=n)
+        mlflow.log_metric(key="val_loss", value=final_val_loss, step=n)
+        
         # update du scheduler
         scheduler.step()
 
         # sauvegarde du modèle en local et mlflow
-        if final_loss < best_loss:
-            best_loss = final_loss
+        if final_val_loss < best_loss:
+            best_loss = final_val_loss
             patience_counter = 0
             torch.save(model.state_dict(), save_path)
-            print(f"modèle sauvegarde à l'époque {n+1}")
+            print(f"modèle sauvegardé à l'époque {n+1} - Val Loss: {final_val_loss:.4f}")
         else: 
-            patience_counter +=1
+            patience_counter += 1
 
         # sauvegarde loss en local
         log_path = HISTORY_DIR / f"{timestamp}_train_history_loss_{model_tag}.csv" 
@@ -129,7 +146,8 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
                 "loss_name": loss_name,
                 "batch_size": BATCH_SIZE,
                 "traing_mode": method_FT,
-                "final_train_loss": final_loss
+                "final_train_loss": final_loss,
+                "final_val_loss": final_val_loss
             }])   
         
         if log_path.exists():

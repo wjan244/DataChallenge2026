@@ -26,9 +26,9 @@ def run_evaluation(timestamp,val_loader,method_FT,prefix)->None:
 
     # instanciation du modèle
     model = get_model(MODEL_NAME, num_classes=1,method=method_FT)
-        # extraire la configuration des données du modèle
-    data_config = timm.data.resolve_model_data_config(model)
-    val_transform = timm.data.create_transform(**data_config, is_training=False) 
+    #     # extraire la configuration des données du modèle
+    # data_config = timm.data.resolve_model_data_config(model)
+    # val_transform = timm.data.create_transform(**data_config, is_training=False) 
         # -> DEVICE
     model.load_state_dict(torch.load(checkpoint_path,map_location=DEVICE))
     model = model.to(DEVICE)
