@@ -22,8 +22,14 @@ class OcclusionModel(nn.Module):
         return self.sigmoide(self.model(x))
 
 def setup_domain_adaptation(model: nn.Module) -> nn.Module:
-    return inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT)
+    model = inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT)
 
+    for name, param in model.named_parameters():
+        if "lora_" in name or "head" in name:
+            param.requires_grad = True
+        else:
+            param.requires_grad = False
+    return model
 
 def setup_linear_probing_with_lora(model: nn.Module) -> nn.Module:
     model = inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT)
@@ -36,7 +42,7 @@ def setup_linear_probing_with_lora(model: nn.Module) -> nn.Module:
 def setup_lora_finetuning(model: nn.Module) -> nn.Module:
     model = inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT)
     for name, param in model.named_parameters():
-        if "lora_" in name:
+        if "lora_" in name or "head" in name:
             param.requires_grad = True
         else:
             param.requires_grad = False
