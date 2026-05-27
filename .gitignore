@@ -1,6 +1,4 @@
-data/celeba/
-data/Crop_224_5fp_100K/
-data/occlusion_datasets
+data/
 
 checkpoints/
 archives/
@@ -20,3 +18,5 @@ submission/
 DataChallengeExample.ipynb
 mlflow.db
 task_brief.pdf
+
+!data/test_distribution.png
