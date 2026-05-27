@@ -31,21 +31,24 @@ def inject_lora_transformer(model:torch.nn.modules, rank:int, alpha:int, dropout
             
             # Création de la couche LoRA avec les poids originaux
             old_layer = getattr(parent, layer_name) # aller chercher l'attribut (objet) dans le chemin layer_name
+
+            has_bias = old_layer.bias is not None
+
             new_layer = LoRALinear(
                 in_dim=old_layer.in_features,
                 out_dim=old_layer.out_features,
                 rank=rank,
                 alpha=alpha,
-                dropout=dropout
+                dropout=dropout,
+                bias=has_bias
             )
             
             # Transfert des poids du Linear Probing vers la partie fixe de LoRA
             new_layer.linear.weight.data = old_layer.weight.data.clone()
             # gestion des biais absents
-            if old_layer.bias is not None:
+            if has_bias:
                 new_layer.linear.bias.data = old_layer.bias.data.clone()
-            else:
-                new_layer.linear.bias = None
+        
             setattr(parent, layer_name, new_layer)
 
     
