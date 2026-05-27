@@ -5,7 +5,8 @@ import torch
 from torch import nn
 from torchinfo import summary
 
-from src.config import NUM_CLASSES,RANK,DROPOUT,ALPHA
+from src.config import RANK,DROPOUT,ALPHA
+from src.path import NUM_CLASSES
 from src.finetuning import inject_lora_transformer
 
 class OcclusionModel(nn.Module):

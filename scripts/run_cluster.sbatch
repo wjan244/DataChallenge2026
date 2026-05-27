@@ -26,10 +26,10 @@
 
 #== Run jobs ==
 # sbatch scripts/run_cluster.sbatch # copy the job number
-# tail -f logs/834388.log
-# squeue -j 834135
+# tail -f logs/834974.log
+# squeue -j 834974
 # squeue -p 834135
-# cat logs/834135.log
+# cat logs/834974.log
 
 # rsync -vr DataChallenge2026.zip name@xxx:/home/infres/cmergny-25/DataChallenge2026/data
 
@@ -59,3 +59,5 @@ echo "timestamp: $(date -Is)"
 
 # scancel 834049 -> arrêter je job
 # sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 --state=RUNNING,PENDING -> voir tous les jobs actifs
+# squeue -p 3090
+# squeue -p 3090 -t RUNNING
