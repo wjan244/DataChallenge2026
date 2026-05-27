@@ -14,13 +14,14 @@ class LoRALinear(nn.Module):
     out_dim: int,
     rank: int,
     alpha: float,
-    dropout: float
+    dropout: float,
+    bias:bool=False
   )->None:
     
     super().__init__()
     
     # These are the weights from the original pretrained model
-    self.linear = nn.Linear(in_dim, out_dim, bias=False)
+    self.linear = nn.Linear(in_dim, out_dim, bias=bias)
 
     # These are the new LoRA params. In general rank << in_dim, out_dim
     self.lora_a = nn.Linear(in_dim, rank, bias=False)

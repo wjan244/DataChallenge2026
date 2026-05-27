@@ -19,7 +19,9 @@ def inject_lora_transformer(model:torch.nn.modules, rank:int, alpha:int, dropout
     """
     - capter les q, k, v dans chacune des couches de SSAST
     - remplacer les poids dans chaque couche par les nouveaux poids (w_backbone + w_lora)"""
-    
+    for params in model.parameters():
+        params.requires_grad = False
+
     # extraction des Q,K,V de chacune des 12 couches
     for name, module in model.named_modules(): 
         if any(target in name for target in ["qkv","query", "key", "value"]):
@@ -39,11 +41,12 @@ def inject_lora_transformer(model:torch.nn.modules, rank:int, alpha:int, dropout
             
             # Transfert des poids du Linear Probing vers la partie fixe de LoRA
             new_layer.linear.weight.data = old_layer.weight.data.clone()
+            # gestion des biais absents
             if old_layer.bias is not None:
                 new_layer.linear.bias.data = old_layer.bias.data.clone()
+            else:
+                new_layer.linear.bias = None
             setattr(parent, layer_name, new_layer)
-    # # jeler tous les poids sauf les poids de LoRa et de la couhche du classifier
-    # for n, p in model.named_parameters():
-    #         p.requires_grad = ("lora_" in n or "classifier" in n)
+
     
     return model
