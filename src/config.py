@@ -26,11 +26,12 @@ else:
 N_SAMPLE = 20000
 
 # Hyper-paramètres entrainement
-MODEL_NAME = 'vit_small_patch14_reg4_dinov2.lvd142m'
+MODEL_NAME = 'mobilenetv3_small_075'
 
                   # exemples:
                   # 'beit3_base_patch16_224'
                   # 'mobilenetv3_small_075'
+                  # 'vit_small_patch14_reg4_dinov2.lvd142m'
                   # hyper paramètres d'entrainement
 PATIENCE = 5
 
@@ -54,7 +55,7 @@ CONFIG_DOMAINE = {
     "loader_factory": get_celeba_train_loader,
     "val_loader_factory": get_celeba_val_loader,
     "learning_rate": 2e-5,
-    "num_epoch": 5
+    "num_epoch": 1
 }
 
 CONFIG_LINEAR_PROBING = {
@@ -63,7 +64,7 @@ CONFIG_LINEAR_PROBING = {
     "loader_factory": get_challenge_train_loader,
     "val_loader_factory": lambda b, n: get_challenge_val_loader(split="val_samp", batch_size=b, num_workers=n),
     "learning_rate": 1e-3,
-    "num_epoch": 15
+    "num_epoch": 1
 }
 
 CONFIG_LORA_FT = {
@@ -72,5 +73,5 @@ CONFIG_LORA_FT = {
     "loader_factory": get_challenge_train_loader,
     "val_loader_factory": lambda b, n: get_challenge_val_loader(split="val_samp", batch_size=b, num_workers=n),
     "learning_rate": 2e-4,
-    "num_epoch": 20
+    "num_epoch": 1
 }
