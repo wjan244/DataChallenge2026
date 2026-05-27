@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from src.config import CHECKPOINT_DIR,HISTORY_DIR, MODEL_NAME, DEVICE, BATCH_SIZE, NUM_WORKERS, PATIENCE
 from src.data_utils import get_challenge_split
+from src.metrics import metric_fn
 from src.models import get_model
 
 LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss}
@@ -106,7 +107,14 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
         model.eval()
         val_loss = 0
         with torch.inference_mode(): 
-            for X_val, y_val in val_loader:
+            for batch in val_loader:
+                # gestion dynamique selon le dataset (CelebA vs Challenge)
+                if len(batch) == 2:
+                    X_val, y_val = batch
+                    gender_val = None
+                else:
+                    X_val, y_val, gender_val, _ = batch
+
                 X_val, y_val = X_val.to(DEVICE), y_val.to(DEVICE)
                 y_val = y_val.view(-1, 1)
                 

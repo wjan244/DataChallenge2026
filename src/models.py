@@ -25,7 +25,7 @@ def setup_domain_adaptation(model: nn.Module) -> nn.Module:
     model = inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT)
 
     for name, param in model.named_parameters():
-        if "lora_" in name or "head" in name:
+        if "lora_" in name or "head" in name or "classifier" in name:
             param.requires_grad = True
         else:
             param.requires_grad = False
@@ -33,16 +33,17 @@ def setup_domain_adaptation(model: nn.Module) -> nn.Module:
 
 def setup_linear_probing_with_lora(model: nn.Module) -> nn.Module:
     model = inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT)
-    for param in model.parameters():
-        param.requires_grad = False
-    for param in model.head.parameters():
-        param.requires_grad = True
+    for name, param in model.named_parameters():
+        if "head" in name or "classifier" in name:
+            param.requires_grad = True
+        else:
+            param.requires_grad = False
     return model
 
 def setup_lora_finetuning(model: nn.Module) -> nn.Module:
     model = inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT)
     for name, param in model.named_parameters():
-        if "lora_" in name or "head" in name:
+        if "lora_" in name or "head" in name or "classifier" in name:
             param.requires_grad = True
         else:
             param.requires_grad = False

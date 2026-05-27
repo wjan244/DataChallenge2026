@@ -26,7 +26,7 @@ else:
 N_SAMPLE = 20000
 
 # Hyper-paramètres entrainement
-MODEL_NAME = 'mobilenetv3_small_075'
+MODEL_NAME = 'beit3_base_patch16_224'
 
                   # exemples:
                   # 'beit3_base_patch16_224'
@@ -54,8 +54,8 @@ CONFIG_DOMAINE = {
     "method_FT": "domain_adaptation",
     "loader_factory": get_celeba_train_loader,
     "val_loader_factory": get_celeba_val_loader,
-    "learning_rate": 2e-5,
-    "num_epoch": 1
+    "learning_rate": 5e-5,
+    "num_epoch": 5
 }
 
 CONFIG_LINEAR_PROBING = {
@@ -64,7 +64,7 @@ CONFIG_LINEAR_PROBING = {
     "loader_factory": get_challenge_train_loader,
     "val_loader_factory": lambda b, n: get_challenge_val_loader(split="val_samp", batch_size=b, num_workers=n),
     "learning_rate": 1e-3,
-    "num_epoch": 1
+    "num_epoch": 15
 }
 
 CONFIG_LORA_FT = {
@@ -73,5 +73,5 @@ CONFIG_LORA_FT = {
     "loader_factory": get_challenge_train_loader,
     "val_loader_factory": lambda b, n: get_challenge_val_loader(split="val_samp", batch_size=b, num_workers=n),
     "learning_rate": 2e-4,
-    "num_epoch": 1
+    "num_epoch": 15
 }
