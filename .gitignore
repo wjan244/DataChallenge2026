@@ -1,4 +1,7 @@
-data/
+data/celeba/
+data/Crop_224_5fp_100K/
+data/occlusion_datasets
+
 checkpoints/
 archives/
 
