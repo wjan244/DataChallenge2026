@@ -5,8 +5,7 @@ import torch
 from torch import nn
 from torchinfo import summary
 
-from src.path import NUM_CLASSES
-from src.finetuning import inject_lora_transformer
+from src.models.finetuning import inject_lora_transformer
 
 class OcclusionModel(nn.Module):
     """
@@ -49,7 +48,7 @@ def setup_lora_finetuning(model: nn.Module, rank: int = 8, alpha: int = 16, drop
             param.requires_grad = False
     return model
 
-def get_model(model_name: str, num_classes=NUM_CLASSES, method: str | None = None, weights: str | Path | None = None, **method_kwargs) -> nn.Module:
+def get_model(model_name: str, num_classes=1, method: str | None = None, weights: str | Path | None = None, **method_kwargs) -> nn.Module:
     """instancier le modèle défini dans config.py et lui affecter une méthode de FineTuning:
     - Linear_probing
     - LoRA

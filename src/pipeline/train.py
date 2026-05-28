@@ -5,13 +5,12 @@ import torch.nn as nn
 
 from pathlib import Path
 from tqdm import tqdm
-from src.config import DEVICE
+from src.config import*
 
-from src.data_utils import get_challenge_split
-from src.loss import WeightedMSELoss, UniversalLossWrapper
-from src.metrics import metric_fn
-from src.models import get_model
-from src.path import *
+from src.data.data_utils import get_challenge_split
+from src.models.loss import WeightedMSELoss, UniversalLossWrapper
+from src.models.models import get_model
+
 
 LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss}
 

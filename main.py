@@ -6,17 +6,11 @@ import random
 import dagshub
 import mlflow
 
-# from evaluation import run_evaluation
-# from src.config import MODEL_NAME, CONFIG_DOMAINE, CONFIG_LINEAR_PROBING, CONFIG_LORA_FT, BATCH_SIZE
-# from src.data_loader import get_challenge_test_loader
-# from src.path import *
-# from src.test import run_test
-# from src.train import run_train
 from src.config import*
 from src.config_utils import load_config
-from src.run_domain_adaptation import run_domain_adaptation
-from src.run_linear_probing import run_linear_probin
-from src.run_lora import run_lora
+from src.pipeline.run_domain_adaptation import run_domain_adaptation
+from src.pipeline.run_linear_probing import run_linear_probin
+from src.pipeline.run_lora import run_lora
 
 SEED = load_config(CONFIG_DEFAULT)["globaux"]["SEED"]
 

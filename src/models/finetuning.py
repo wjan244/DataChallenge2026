@@ -1,6 +1,6 @@
 import torch
 
-from src.lora import LoRALinear
+from src.models.lora import LoRALinear
 
 def inject_linear_probing(model:torch.nn.Module)->torch.nn.Module:
     """exécute un FineTuning de type LinearProbing:

@@ -3,8 +3,8 @@ import mlflow
 from evaluation import run_evaluation
 from src.config import *
 
-from src.data_loader import*
-from src.train import run_train
+from src.data.data_loader import*
+from src.pipeline.train import run_train
 
 
 
@@ -30,7 +30,7 @@ def run_domain_adaptation(cfg, file_name, timestamp, experiment_id, precedent_ru
         run_id, _, _, _, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id, precedent_method, prefix=None)
         return_method = cfg_method["method_FT"]
         
-        run_evaluation(timestamp=timestamp, val_loader=val_loader, method_FT=return_method, cfg_glob=cfg_glob, cfg_method=cfg_method, model_name=cfg_mod, prefix=None)
+        run_evaluation(timestamp=timestamp, val_loader=val_loader, method_FT=return_method, cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix=None)
 
     print(f"fin d'entrainement par {cfg_method['method_FT']}")
 

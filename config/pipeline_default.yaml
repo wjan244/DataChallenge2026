@@ -5,7 +5,7 @@ globaux:
   NUM_CLASSES : 1
   PATIENCE : 5
   BATCH_SIZE : 32
-
+  
 domain_adaptation_training:
   loss_name: "BCE"
   learning_rate: 5.0e-5

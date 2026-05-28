@@ -5,12 +5,12 @@ import mlflow
 
 from tqdm import tqdm
 
-from src.config_utils import load_config
-from src.path import *
+from src.config import*
 from src.metrics import metric_fn
-from src.models import get_model
+from src.models.models import get_model
 
-def run_evaluation(timestamp,val_loader,method_FT,cfg_glob,cfg_mod,prefix=None)->None:
+def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, model_name=None, prefix=None, **kwargs)->None:
+
     """
     Pipe d'évalualtion:
     - inférence du modèle entrainé sur le dataset eval
