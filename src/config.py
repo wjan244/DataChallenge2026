@@ -1,54 +1,32 @@
-# méthode d'adaptation de la distribution
-AUGMENTATION = False
+import os
 
-# Hyper-paramètres entrainement
-MODEL_NAME = 'beit3_base_patch16_224'
+import torch
 
-                  # exemples:
-                  # 'beit3_base_patch16_224'
-                  # 'mobilenetv3_small_075'
-                  # 'vit_small_patch14_reg4_dinov2.lvd142m'
-                  # hyper paramètres d'entrainement
-PATIENCE = 5
+from pathlib import Path
 
-# hyper-paramètres Dataloader
-BATCH_SIZE = 32
+# chemins vers les dossiers
+BASE_DIR = Path(__file__).resolve().parent.parent # pointer directement vers la racine
 
-# Hyper-paramètres LoRA
-RANK = 16
-ALPHA = 16
-DROPOUT = 0.2
+DATA = BASE_DIR / "data"
+IMG_DIR = DATA / "Crop_224_5fp_100K" 
+CSV_DIR = DATA / "occlusion_datasets"
 
-from src.data_loader import (get_challenge_train_loader,get_celeba_train_loader, 
-                             get_celeba_val_loader, get_challenge_val_loader)
+SCREENSHOT_PATH = DATA / "test_distribution.png"
+SUBMISSION_DIR = BASE_DIR / "submission"
 
-# configuration des méthodes de Fine_Tuning
-CONFIG_DOMAINE = {
-    "loss_name": "BCE",
-    "method_FT": "domain_adaptation",
-    "loader_factory": get_celeba_train_loader,
-    "val_loader_factory": get_celeba_val_loader,
-    "learning_rate": 5e-5,
-    "num_epoch": 5 #5
-}
+CHECKPOINT_DIR = BASE_DIR / "checkpoints"
+HISTORY_DIR = BASE_DIR / "history"
 
-CONFIG_LINEAR_PROBING = {
-    "loss_name": "nMSE",
-    "method_FT": "linear_probing",
-    "loader_factory": get_challenge_train_loader,
-    "val_loader_factory": lambda b, n: get_challenge_val_loader(split="val_samp", batch_size=b, num_workers=n),
-    "learning_rate": 1e-3,
-    "num_epoch": 8#15
-}
+CONFIG = BASE_DIR / "config"
+CONFIG_DEFAULT = CONFIG/"pipeline_default.yaml"
+CONFIG_MODELS = CONFIG/"models"
 
-CONFIG_LORA_FT = {
-    "loss_name": "nMSE",
-    "method_FT": "LoRA_Transformer",
-    "loader_factory": get_challenge_train_loader,
-    "val_loader_factory": lambda b, n: get_challenge_val_loader(split="val_samp", batch_size=b, num_workers=n),
-    "learning_rate": 2e-4,
-    "num_epoch": 15#15
-}
+# device
+if torch.backends.mps.is_available():
+        DEVICE = torch.device("mps")         
+elif torch.cuda.is_available():
+       DEVICE = torch.device("cuda")       
+else:
+      DEVICE = torch.device("cpu")
 
-
-
+NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()

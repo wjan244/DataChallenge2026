@@ -5,20 +5,21 @@ import mlflow
 
 from tqdm import tqdm
 
-from src.config import MODEL_NAME, BATCH_SIZE
+from src.config_utils import load_config
 from src.path import *
 from src.metrics import metric_fn
 from src.models import get_model
 
-def run_evaluation(timestamp,val_loader,method_FT,prefix)->None:
+def run_evaluation(timestamp,val_loader,method_FT,cfg_glob,cfg_mod,prefix=None)->None:
     """
     Pipe d'évalualtion:
     - inférence du modèle entrainé sur le dataset eval
     - calcul du score
     - sauvegarde du score en local et sur le Dashboard MLFlow
     """
+
     # attribuer le nom au modèle
-    model_tag = f"{MODEL_NAME}_{method_FT}"
+    model_tag = f"{cfg_mod}_{method_FT}"
 
     # création des dossiers locaux et checkpoint_path (dossier d'extraction des poids)
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
@@ -26,7 +27,7 @@ def run_evaluation(timestamp,val_loader,method_FT,prefix)->None:
     checkpoint_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
 
     # instanciation du modèle
-    model = get_model(MODEL_NAME, num_classes=1,method=method_FT)
+    model = get_model(cfg_mod, num_classes=1,method=method_FT)
     
         # -> DEVICE
     model.load_state_dict(torch.load(checkpoint_path,map_location=DEVICE))
@@ -81,9 +82,9 @@ def run_evaluation(timestamp,val_loader,method_FT,prefix)->None:
     new_row = pd.DataFrame([{
         "id_run": mlflow.active_run().info.run_id,
         "date":timestamp,
-        "modèle": MODEL_NAME,
+        "modèle": cfg_mod,
         "method_FT":method_FT,
-        "batch_size":BATCH_SIZE,
+        "batch_size":cfg_glob["BATCH_SIZE"],
         "score":score}])
         # ajout de la nouvelle ligne si non existante
     if log_path.exists():

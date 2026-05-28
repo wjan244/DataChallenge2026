@@ -5,12 +5,11 @@ import pandas as pd
 
 from tqdm import tqdm
 
-from src.config import MODEL_NAME
 from src.models import get_model
 from src.path import*
 
 
-def run_test(timestamp,test_loader,method_FT)->None:
+def run_test(timestamp,test_loader,method_FT,cfg_mod)->None:
     """
     Pipe comple de test:
     - instancie le modèle pré entrainé
@@ -19,7 +18,7 @@ def run_test(timestamp,test_loader,method_FT)->None:
     - sauvegarde du fichier submission en local et sur le dashbord
     """
      # attribuer le nom au modèle
-    model_tag = f"{MODEL_NAME}_{method_FT}"
+    model_tag = f"{cfg_mod}_{method_FT}"
     # création des dossiers locaux
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
     SUBMISSION_DIR.mkdir(parents=True,exist_ok=True)
@@ -27,7 +26,7 @@ def run_test(timestamp,test_loader,method_FT)->None:
     checkpoint_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
 
      # instanciation du modèle
-    model = get_model(MODEL_NAME, num_classes=1,method=method_FT)
+    model = get_model(cfg_mod, num_classes=1,method=method_FT)
     # data_config = timm.data.resolve_model_data_config(model)
     # test_transform = timm.data.create_transform(**data_config, is_training=False)
 

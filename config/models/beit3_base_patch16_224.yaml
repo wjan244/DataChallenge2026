@@ -1,0 +1,23 @@
+model: 'beit3_base_patch16_224'
+
+domain_adaptation_training:
+  loss_name: "BCE"
+  learning_rate: 5.0e-5
+  num_epoch: 5
+  augmentation: False
+
+linear_probing_training:
+  loss_name: "nMSE"
+  learning_rate: 1.0e-3
+  num_epoch: 8
+  augmentation: False
+
+lora_training:
+  loss_name: "nMSE"
+  learning_rate: 2.0e-4
+  num_epoch: 15
+  DROPOUT : 0.2
+  augmentation: False
+
+
+

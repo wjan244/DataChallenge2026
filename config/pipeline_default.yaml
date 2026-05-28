@@ -1,0 +1,40 @@
+globaux:
+  SEED : 42
+  N_SAMPLE : 5000
+  N_BINS : 20
+  NUM_CLASSES : 1
+  PATIENCE : 5
+  BATCH_SIZE : 32
+
+domain_adaptation_training:
+  loss_name: "BCE"
+  learning_rate: 5.0e-5
+  num_epoch: 5
+  augmentation: True
+  "method_FT": "domain_adaptation"
+  loader_factory: "get_celeba_train_loader"
+  val_loader_factory: "get_celeba_val_loader"
+
+linear_probing_training:
+  loss_name: "nMSE"
+  learning_rate: 1.0e-3
+  num_epoch: 8
+  augmentation: True
+  "method_FT": "linear_probing"
+  loader_factory: "get_challenge_train_loader"
+  val_loader_factory: "get_challenge_val_loader"
+  val_split: "val_samp"
+
+lora_training:
+  loss_name: "nMSE"
+  learning_rate: 2.0e-4
+  num_epoch: 15
+  DROPOUT : 0.2
+  augmentation: True
+  "method_FT": "LoRA_Transformer"
+  loader_factory: "get_challenge_train_loader"
+  val_loader_factory: "get_challenge_val_loader"
+  val_split: "val_samp"
+
+
+

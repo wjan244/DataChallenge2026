@@ -5,8 +5,8 @@ import torch.nn as nn
 
 from pathlib import Path
 from tqdm import tqdm
+from src.config import DEVICE
 
-from src.config import MODEL_NAME, BATCH_SIZE,PATIENCE,AUGMENTATION
 from src.data_utils import get_challenge_split
 from src.loss import WeightedMSELoss, UniversalLossWrapper
 from src.metrics import metric_fn
@@ -15,7 +15,9 @@ from src.path import *
 
 LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss}
 
-def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_loader,val_loader,precedent_run_id=None,precedent_method=None,prefix:str|None=None,**kwargs)->tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
+def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method,
+              precedent_run_id=None, precedent_method=None, prefix: str | None = None,
+              **kwargs) -> tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
     """
     Pipe d'entrainement complet du modèle défini dans config.py:
     - extraire les poids du run_train précédent
@@ -31,14 +33,20 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
     CHECKPOINT_DIR.mkdir(parents=True,exist_ok=True)
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
 
-    # attribuer le nom au modèle
-    model_tag = f"{MODEL_NAME}_{method_FT}"
+    # charger les paramètres yaml
+    learning_rate = cfg_method["learning_rate"]
+    num_epoch = cfg_method["num_epoch"]
+    loss_name = cfg_method["loss_name"]
+    method_FT = cfg_method["method_FT"]
+    patience = cfg_glob["PATIENCE"]
+    model_tag = f"{cfg_mod}_{method_FT}"
+
     # # load dataframes
     _, df_val_raw, df_val_samp, df_test = get_challenge_split()
     
     # extraction des poids précédents
     if precedent_run_id:
-        precedent_tag = f"{MODEL_NAME}_{precedent_method}"
+        precedent_tag = f"{cfg_mod}_{precedent_method}"
         weights = mlflow.artifacts.download_artifacts(
             run_id=precedent_run_id,
             artifact_path=f"{timestamp}_{precedent_tag}.pt")
@@ -46,7 +54,7 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
         weights = None
 
     # instancier le modèle
-    model = get_model(MODEL_NAME, num_classes=1,method=method_FT,weights=weights)
+    model = get_model(cfg_mod, num_classes=1,method=method_FT,weights=weights)
          # -> DEVICE
     model = model.to(DEVICE)
       
@@ -59,19 +67,13 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=num_epoch,eta_min=0,last_epoch=-1)
 
     # paramétrisatio MLFlow
-    hyper_params = {
-        "model":MODEL_NAME,
-        "tag": model_tag,
-        "learnin_rate" : scheduler.get_last_lr()[0],
-        "num_epoch": num_epoch,
-        "batch_size": BATCH_SIZE,
-        "num_worker": NUM_WORKERS,
-        "loss": loss_name,
-        "training_mode": method_FT,
-        "time_stamp":timestamp,
-        "prefix":prefix,
-        "data_augmentation":AUGMENTATION
-    }
+    hyper_params = {**cfg_glob, **cfg_method}
+    hyper_params.update({
+        "model": cfg_mod,
+        "model_tag": model_tag,
+        "time_stamp": timestamp,
+        "prefix": prefix
+    })
     mlflow.log_params(hyper_params)
 
     # entrainement
@@ -80,7 +82,6 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
 
     # initialisation early stopping
     best_loss = float('inf')
-    patience = PATIENCE
     patience_counter = 0
 
     for n in range(num_epoch):
@@ -141,20 +142,18 @@ def run_train(timestamp:str,loss_name,method_FT,learning_rate,num_epoch,train_lo
 
         # sauvegarde loss en local
         log_path = HISTORY_DIR / f"{timestamp}_train_history_loss_{model_tag}.csv" 
-        new_row = pd.DataFrame([{
-                "id_run": mlflow.active_run().info.run_id,
-                "date": timestamp,
-                "modèle": MODEL_NAME,
-                "tag": model_tag,
-                "learning_rate": learning_rate,
-                "epoch": n+1,
-                "num_epoch": num_epoch,
-                "loss_name": loss_name,
-                "batch_size": BATCH_SIZE,
-                "traing_mode": method_FT,
-                "final_train_loss": final_loss,
-                "final_val_loss": final_val_loss
-            }])   
+        row_dict = {**cfg_glob, **cfg_method}
+        
+        row_dict.update({
+            "id_run": mlflow.active_run().info.run_id,
+            "date": timestamp,
+            "modèle": cfg_mod,
+            "tag": model_tag,
+            "epoch": n + 1,
+            "final_train_loss": final_loss,
+            "final_val_loss": final_val_loss
+        })   
+        new_row = pd.DataFrame([row_dict]) 
         
         if log_path.exists():
             new_row.to_csv(log_path, mode='a', header=False, index=False)

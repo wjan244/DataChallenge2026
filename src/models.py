@@ -5,7 +5,6 @@ import torch
 from torch import nn
 from torchinfo import summary
 
-from src.config import RANK,DROPOUT,ALPHA
 from src.path import NUM_CLASSES
 from src.finetuning import inject_lora_transformer
 
@@ -22,8 +21,8 @@ class OcclusionModel(nn.Module):
     def forward(self,x:torch.Tensor)->torch.Tensor:
         return self.sigmoide(self.model(x))
 
-def setup_domain_adaptation(model: nn.Module) -> nn.Module:
-    model = inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT)
+def setup_domain_adaptation(model: nn.Module, rank: int = 8, alpha: int = 16, dropout: float = 0.0, **kwargs) -> nn.Module:
+    model = inject_lora_transformer(model, rank=rank, alpha=alpha, dropout=dropout)
 
     for name, param in model.named_parameters():
         if "lora_" in name or "head" in name or "classifier" in name:
@@ -32,8 +31,8 @@ def setup_domain_adaptation(model: nn.Module) -> nn.Module:
             param.requires_grad = False
     return model
 
-def setup_linear_probing_with_lora(model: nn.Module) -> nn.Module:
-    model = inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT)
+def setup_linear_probing_with_lora(model: nn.Module, rank: int = 8, alpha: int = 16, dropout: float = 0.0, **kwargs) -> nn.Module:
+    model = inject_lora_transformer(model, rank=rank, alpha=alpha, dropout=dropout)
     for name, param in model.named_parameters():
         if "head" in name or "classifier" in name:
             param.requires_grad = True
@@ -41,8 +40,8 @@ def setup_linear_probing_with_lora(model: nn.Module) -> nn.Module:
             param.requires_grad = False
     return model
 
-def setup_lora_finetuning(model: nn.Module) -> nn.Module:
-    model = inject_lora_transformer(model, rank=RANK, alpha=ALPHA, dropout=DROPOUT)
+def setup_lora_finetuning(model: nn.Module, rank: int = 8, alpha: int = 16, dropout: float = 0.0, **kwargs) -> nn.Module:
+    model = inject_lora_transformer(model, rank=rank, alpha=alpha, dropout=dropout)
     for name, param in model.named_parameters():
         if "lora_" in name or "head" in name or "classifier" in name:
             param.requires_grad = True
@@ -50,14 +49,7 @@ def setup_lora_finetuning(model: nn.Module) -> nn.Module:
             param.requires_grad = False
     return model
 
-
-TRAIN_MODE = {
-    "domain_adaptation": setup_domain_adaptation, # renvoyer modèle avec injection mat LoRA
-    "linear_probing": setup_linear_probing_with_lora, # renvoyer modèle avec injection mat LoRA et gèle LoRA + Backbone
-    "LoRA_Transformer": setup_lora_finetuning} # Fine tuning par LoRA
-
-
-def get_model (model_name:str,num_classes=NUM_CLASSES,method:str|None=None,weights:str|Path|None=None)->nn.Module:
+def get_model(model_name: str, num_classes=NUM_CLASSES, method: str | None = None, weights: str | Path | None = None, **method_kwargs) -> nn.Module:
     """instancier le modèle défini dans config.py et lui affecter une méthode de FineTuning:
     - Linear_probing
     - LoRA
@@ -72,24 +64,33 @@ def get_model (model_name:str,num_classes=NUM_CLASSES,method:str|None=None,weigh
     # ajout de la sigmoïde au modèle chargé
     model = OcclusionModel(model)
 
-   # attribuer la méthode d'entrainement
-    if method in TRAIN_MODE:
-        train_method = TRAIN_MODE[method]
-        model.model = train_method(model.model)
+  # aiguillage avec passage des kwargs du YAML (rank, alpha, dropout)
+    if method == "domain_adaptation":
+        model.model = setup_domain_adaptation(model.model, **method_kwargs)
+    elif method == "linear_probing":
+        model.model = setup_linear_probing_with_lora(model.model, **method_kwargs)
+    elif method == "LoRA_Transformer":
+        model.model = setup_lora_finetuning(model.model, **method_kwargs)
 
-    # charger les nouveaux poids du modèle entrainé à l'étape d'avant
+    # Charger les poids de l'étape précédente si spécifié
     if weights is not None:
-        state_dict = torch.load(weights,map_location='cpu')
+        state_dict = torch.load(weights, map_location='cpu')
         model.load_state_dict(state_dict)
 
     return model
 
+
 if __name__ == "__main__":
-    from src.config import MODEL_NAME
-
-    model = get_model(MODEL_NAME,num_classes=1,method="domain_adaptation")
+    from src.config_utils import load_config
+    
+    cfg = load_config("beit3_base_patch16_224.yaml")
+    
+    # On teste en passant le dictionnaire d'hyperparamètres du YAML via **
+    model = get_model(
+        model_name=cfg["model"], 
+        num_classes=1, 
+        method="domain_adaptation",
+        **cfg["domain_adaptation_training"]
+    )
+    
     summary(model)
-    # afficher le nom des couches
-    for name, params in list(model.named_parameters())[:]:
-        print(name)
-

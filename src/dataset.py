@@ -16,14 +16,13 @@ from typing import Callable, Optional, Union
 
 class Dataset(torch.utils.data.Dataset):
     'Characterizes a dataset for PyTorch'
-    def __init__(self, df:pd.DataFrame, image_dir:str, training:bool=True, transform:Optional[Callable]=None)->None:
+    def __init__(self, df:pd.DataFrame, image_dir:str, training:bool=True, transform:Optional[Callable]=None,augmentation=False)->None:
          'Initialization'
-         from src.config import AUGMENTATION
          self.training = training
          self.image_dir = image_dir
          self.df = df
          self.transform = transform if transform else transforms.ToTensor()
-         self.augment_factor = 4 if (training and AUGMENTATION) else 1
+         self.augment_factor = 4 if (training and augmentation) else 1
          
     def __len__(self)->int:
         'Denotes the total number of samples'

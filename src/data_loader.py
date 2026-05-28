@@ -5,7 +5,6 @@ import timm
 from pathlib import Path
 from torch.utils.data import DataLoader
 
-from src.config import MODEL_NAME
 from src.dataset import Dataset, ChallengeTrain, CelebA
 from src.path import *
 from src.data_utils import get_challenge_split
@@ -24,9 +23,9 @@ def get_challenge_train_loader(batch_size: int, num_workers: int = 0) -> DataLoa
     return DataLoader(standard_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
         
 
-def get_celeba_train_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
+def get_celeba_train_loader(batch_size: int, num_workers: int = 0,model_name: str = None) -> DataLoader:
     """Génère le DataLoader CelebA d'entraînement en utilisant la classe locale CelebA."""
-    data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
+    data_config = timm.data.resolve_model_data_config(timm.create_model(model_name, pretrained=True))
     transform_pipeline = timm.data.create_transform(**data_config, is_training=True)
 
     # Utilisation de ta classe locale sur le split entraînement
@@ -39,20 +38,20 @@ def get_celeba_train_loader(batch_size: int, num_workers: int = 0) -> DataLoader
     return DataLoader(celeba_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
 
-def get_challenge_val_loader(split: str, batch_size: int, num_workers: int = 0) -> DataLoader:
+def get_challenge_val_loader(split: str, batch_size: int, num_workers: int = 0,model_name: str = None) -> DataLoader:
     
     _, df_val_raw, df_val_samp, _ = get_challenge_split()
     df_val = df_val_samp if split == "val_samp" else df_val_raw
     
-    data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
+    data_config = timm.data.resolve_model_data_config(timm.create_model(model_name, pretrained=True))
     val_transform = timm.data.create_transform(**data_config, is_training=False)
 
     val_set = Dataset(df_val, IMG_DIR, training=True, transform=val_transform)
     return DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
-def get_celeba_val_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
+def get_celeba_val_loader(batch_size: int, num_workers: int = 0,model_name: str = None) -> DataLoader:
     """Génère le DataLoader de validation CelebA en utilisant la classe locale CelebA."""
-    data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
+    data_config = timm.data.resolve_model_data_config(timm.create_model(model_name, pretrained=True))
     val_transform = timm.data.create_transform(**data_config, is_training=False)
 
     # Utilisation de ta classe locale sur le split validation ("valid")
@@ -64,9 +63,9 @@ def get_celeba_val_loader(batch_size: int, num_workers: int = 0) -> DataLoader:
     return DataLoader(celeba_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
 
-def get_challenge_test_loader(df_test: pd.DataFrame, batch_size: int, num_workers: int = 0) -> DataLoader:
+def get_challenge_test_loader(df_test: pd.DataFrame, batch_size: int, num_workers: int = 0,model_name: str = None) -> DataLoader:
 
-    data_config = timm.data.resolve_model_data_config(timm.create_model(MODEL_NAME, pretrained=True))
+    data_config = timm.data.resolve_model_data_config(timm.create_model(model_name, pretrained=True))
     test_transform = timm.data.create_transform(**data_config, is_training=False)
 
     test_set = Dataset(df_test, IMG_DIR, training=False, transform=test_transform)
