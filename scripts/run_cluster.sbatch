@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=20:00:00
+#SBATCH --time=25:00:00
 #SBATCH --cpus-per-task=10 # nber of env = #cpus - 2 (main process + OS)
 #SBATCH --ntasks=1
 #SBATCH --mem=64G 
