@@ -36,5 +36,5 @@ def main(file_name):
 
     
 if __name__ == "__main__":
-    main('vit_tiny_patch16_224.yaml')
+    main('beit3_base_patch16_224.yaml')
     
