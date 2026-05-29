@@ -26,9 +26,9 @@
 
 #== Run jobs ==
 # sbatch scripts/run_cluster.sbatch # copy the job number
-# tail -f logs/8836891.log
-# squeue -j 834135
-# squeue -p 834135
+# tail -f logs/836895.log
+# squeue -j 836895
+# squeue -p 836895
 # cat logs/834135.log
 
 # rsync -vr DataChallenge2026.zip name@xxx:/home/infres/cmergny-25/DataChallenge2026/data
@@ -57,8 +57,20 @@ source .venv/bin/activate
 # synchroniser/installer si besoin (uv accessible depuis la venv)
 uv sync
 
-# exécuter une seule fois
-uv run python main.py
+# diagnostics rapides avant le run
+echo "CWD: $(pwd)"
+echo "which python: $(which python)"
+python --version || true
+python -c "print('PYTHON_OK')" || true
+
+# exécuter une seule fois et capturer la sortie dans un fichier spécifique au job
+LOGFILE=logs/uv_${SLURM_JOB_ID:-manual}.log
+echo "Running: uv run python main.py -> $LOGFILE"
+uv run python main.py > "$LOGFILE" 2>&1
+RC=$?
+echo "uv run exited with code: $RC"
+echo "--- tail of $LOGFILE ---"
+tail -n 200 "$LOGFILE" || true
 
 echo "=== JOB END ==="
 echo "timestamp: $(date -Is)"
