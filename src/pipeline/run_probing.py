@@ -1,6 +1,6 @@
 import mlflow
 
-from evaluation import run_evaluation
+from src.pipeline.evaluation import run_evaluation
 from src.config import *
 from src.data.data_loader import*
 from src.pipeline.test import run_test
@@ -19,7 +19,8 @@ def run_linear_probin(cfg,timestamp, experiment_id, precedent_run_id=None, prece
         get_challenge_val_loader = globals()[cfg_method["val_loader_factory"]]
 
         train_loader = get_challenge_train_loader(batch_size=cfg_glob["BATCH_SIZE"],
-                                                  num_workers=NUM_WORKERS)
+                                                  num_workers=NUM_WORKERS,model_name=cfg_mod,
+                                                  augmentation=cfg_method["augmentation"])
         
         val_loader = get_challenge_val_loader(split="val_samp",batch_size=cfg_glob["BATCH_SIZE"],
                                               num_workers=NUM_WORKERS,model_name=cfg_mod)

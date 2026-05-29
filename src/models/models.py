@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torchinfo import summary
 
-from src.models.finetuning import inject_lora_transformer
+from src.models.finetuning import inject_linear_mlp_probing,inject_lora_transformer
 
 class OcclusionModel(nn.Module):
     """
@@ -20,9 +20,11 @@ class OcclusionModel(nn.Module):
     def forward(self,x:torch.Tensor)->torch.Tensor:
         return self.sigmoide(self.model(x))
 
-def setup_domain_adaptation(model: nn.Module, rank: int = 8, alpha: int = 16, dropout: float = 0.0, **kwargs) -> nn.Module:
-    model = inject_lora_transformer(model, rank=rank, alpha=alpha, dropout=dropout)
-
+def _setup_domain_adaptation(model: nn.Module, rank: int = 8, alpha: int = 16, dropout: float = 0.0, **kwargs) -> nn.Module:
+    # injecter les poids LoRA si pas déjà présent (une seule injection)
+    if not any("lora_" in name for name, _ in model.named_parameters()):
+        model = inject_lora_transformer(model, rank=rank, alpha=alpha, dropout=dropout)
+    # geler/ libérer les poids souhaités
     for name, param in model.named_parameters():
         if "lora_" in name or "head" in name or "classifier" in name:
             param.requires_grad = True
@@ -30,8 +32,14 @@ def setup_domain_adaptation(model: nn.Module, rank: int = 8, alpha: int = 16, dr
             param.requires_grad = False
     return model
 
-def setup_linear_probing_with_lora(model: nn.Module, rank: int = 8, alpha: int = 16, dropout: float = 0.0, **kwargs) -> nn.Module:
-    model = inject_lora_transformer(model, rank=rank, alpha=alpha, dropout=dropout)
+def _setup_probing(model: nn.Module, rank: int = 8, alpha: int = 16, 
+                   dropout: float = 0.0, probing_type:str=None,hidden_size:str=None, **kwargs) -> nn.Module:
+    # injecter les poids LoRA si pas déja prsents
+    if not any("lora_" in name for name, _ in model.named_parameters()):
+        model = inject_lora_transformer(model, rank=rank, alpha=alpha, dropout=dropout)
+    model = inject_linear_mlp_probing(model,probing_type,hidden_size)
+
+    # geler/ libérer les poids souhaités
     for name, param in model.named_parameters():
         if "head" in name or "classifier" in name:
             param.requires_grad = True
@@ -39,8 +47,11 @@ def setup_linear_probing_with_lora(model: nn.Module, rank: int = 8, alpha: int =
             param.requires_grad = False
     return model
 
-def setup_lora_finetuning(model: nn.Module, rank: int = 8, alpha: int = 16, dropout: float = 0.0, **kwargs) -> nn.Module:
-    model = inject_lora_transformer(model, rank=rank, alpha=alpha, dropout=dropout)
+def _setup_lora_finetuning(model: nn.Module, rank: int = 8, alpha: int = 16, dropout: float = 0.0, **kwargs) -> nn.Module:
+    # injecter les poids LoRA si pas déja prsents (une seule injection)
+    if not any("lora_" in name for name, _ in model.named_parameters()):
+        model = inject_lora_transformer(model, rank=rank, alpha=alpha, dropout=dropout)
+    # geler/ libérer les poids souhaités
     for name, param in model.named_parameters():
         if "lora_" in name or "head" in name or "classifier" in name:
             param.requires_grad = True
@@ -53,29 +64,26 @@ def get_model(model_name: str, num_classes=1, method: str | None = None, weights
     - Linear_probing
     - LoRA
     """
+    METHOD_MAPPING = {"domain_adaptation":_setup_domain_adaptation,"probing_training":_setup_probing,"lora_training":_setup_lora_finetuning} 
     # récupérer le modèle
     model = timm.create_model( # timm permet de donner accés à quasiment tous les modèle. Il suffit juste de spécifier le bon nom.
         model_name,
         pretrained=True,
-        num_classes=num_classes
-    )
+        num_classes=num_classes)
     
     # ajout de la sigmoïde au modèle chargé
     model = OcclusionModel(model)
-
-  # aiguillage avec passage des kwargs du YAML (rank, alpha, dropout)
-    if method == "domain_adaptation":
-        model.model = setup_domain_adaptation(model.model, **method_kwargs)
-    elif method == "linear_probing":
-        model.model = setup_linear_probing_with_lora(model.model, **method_kwargs)
-    elif method == "LoRA_Transformer":
-        model.model = setup_lora_finetuning(model.model, **method_kwargs)
-
-    # Charger les poids de l'étape précédente si spécifié
-    if weights is not None:
-        state_dict = torch.load(weights, map_location='cpu')
-        model.load_state_dict(state_dict)
-
+    # si aucune méthode spécifiée, retourner le modèle tel quel
+    if method is None:
+        return model
+    # accepter quelques alias courts éventuels puis valider
+    SHORT_METHODS = {"probing": "probing_training", "lora": "lora_training", "domain": "domain_adaptation"}
+    if method in SHORT_METHODS:
+        method = SHORT_METHODS[method]
+    if method not in METHOD_MAPPING:
+        raise ValueError(f"Unknown method {method!r}. Supported: {list(METHOD_MAPPING.keys())}")
+    # injecter la méthode
+    model = METHOD_MAPPING[method](model,**method_kwargs)
     return model
 
 
@@ -88,8 +96,8 @@ if __name__ == "__main__":
     model = get_model(
         model_name=cfg["model"], 
         num_classes=1, 
-        method="domain_adaptation",
-        **cfg["domain_adaptation_training"]
+        method="lora_training",
+        **cfg["lora_training"].get("method_kwargs")
     )
     
     summary(model)

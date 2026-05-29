@@ -3,13 +3,15 @@ import timm
 import torch
 import mlflow
 
+from torchmetrics.classification import BinaryF1Score
 from tqdm import tqdm
 
 from src.config import*
 from src.metrics import metric_fn
 from src.models.models import get_model
 
-def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, model_name=None, prefix=None, **kwargs)->None:
+
+def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, prefix=None)->None:
 
     """
     Pipe d'évalualtion:
@@ -39,17 +41,32 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, mod
         correct = 0
         total = 0
         with torch.inference_mode():
-        
+            f1_metric = BinaryF1Score(threshold=0.5)
+            f1_scores = []
             for X, y in val_loader:
-                X, y = X.to(DEVICE), y.to(DEVICE)
+                X = X.to(DEVICE)
+                y = y.to(DEVICE).view(-1, 1)
                 y_pred = model(X)
-                preds = (y_pred > 0.5).float()
-                correct += (preds == y).sum().item()
-                total += y.size(0)
-        
-        score = correct / total
-        metric_name = f"{prefix}_val_acc_gender"
 
+                # calcul de la prédiction (binaire)
+                preds = (y_pred > 0.5).int()
+                y_int = y.int()
+
+                correct += (preds == y_int).sum().item()
+                total += y_int.size(0)
+
+                # calcul f1_score
+                f1_score_batch = f1_metric(preds, y_int)
+                f1_scores.append(float(f1_score_batch))
+
+            # aggregation des métriques
+            f1_score = float(sum(f1_scores) / len(f1_scores))
+            accuracy = correct / total 
+            # mlflow
+            mlflow.log_metric("f1_score", f1_score)
+            mlflow.log_metric("accuracy", accuracy)
+            score = f1_score
+        
     # gestion du cas général
     else:
         results_list = []
@@ -75,6 +92,8 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, mod
         results_female = results_df.loc[results_df["gender"] == 0.0]
         score = metric_fn(results_female,results_male)
         metric_name = f"{prefix}_val_score"
+        # mlflow
+        mlflow.log_metric(metric_name,score)
 
     # sauvegarde du score dans le journal (en local)
     log_path = HISTORY_DIR / f"{timestamp}_eval_history_{model_tag}.csv"
@@ -92,4 +111,5 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, mod
     else:
         new_row.to_csv(log_path, index=False)
 
-    mlflow.log_metric(metric_name,score)
+
+    

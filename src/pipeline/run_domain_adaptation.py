@@ -1,6 +1,6 @@
 import mlflow
 
-from evaluation import run_evaluation
+from src.pipeline.evaluation import run_evaluation
 from src.config import *
 
 from src.data.data_loader import*
@@ -23,7 +23,8 @@ def run_domain_adaptation(cfg, file_name, timestamp, experiment_id, precedent_ru
 
 
         train_loader = get_celeba_train_loader(batch_size=cfg_glob["BATCH_SIZE"],
-                                                  num_workers=NUM_WORKERS,model_name=cfg_mod)
+                                               num_workers=NUM_WORKERS,model_name=cfg_mod,
+                                               augmentation=cfg_method["augmentation"])
         val_loader = get_celeba_val_loader(batch_size=cfg_glob["BATCH_SIZE"],
                                               num_workers=NUM_WORKERS,model_name=cfg_mod)
         

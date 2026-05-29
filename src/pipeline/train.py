@@ -8,15 +8,14 @@ from tqdm import tqdm
 from src.config import*
 
 from src.data.data_utils import get_challenge_split
-from src.models.loss import WeightedMSELoss, UniversalLossWrapper
+from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
 from src.models.models import get_model
 
 
-LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss}
+LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLiteMSE":WeightedLiteMSELoss}
 
 def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method,
-              precedent_run_id=None, precedent_method=None, prefix: str | None = None,
-              **kwargs) -> tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
+              precedent_run_id, precedent_method, prefix: str | None = None,) -> tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
     """
     Pipe d'entrainement complet du modèle défini dans config.py:
     - extraire les poids du run_train précédent
@@ -53,8 +52,9 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         weights = None
 
     # instancier le modèle
-    model = get_model(cfg_mod, num_classes=1,method=method_FT,weights=weights)
-         # -> DEVICE
+    cfg_method_kwargs = cfg_method.get("method_kwargs")
+    model = get_model(cfg_mod, num_classes=1, method=method_FT, weights=weights, **cfg_method_kwargs)
+    # -> DEVICE
     model = model.to(DEVICE)
       
     # GD
@@ -93,10 +93,11 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
             X, y = batch[0].to(DEVICE), batch[1].to(DEVICE).view(-1, 1)
             
             #uniquement pour Dataset Challenge
-            iw = batch[4].to(DEVICE).view(-1, 1) if len(batch) == 5 else None
+            iw = batch[4].to(DEVICE).view(-1, 1) if loss_name=="nLiteMSE" else None
+            iw, pi = batch[4].to(DEVICE).view(-1, 1), batch[5].to(DEVICE).view(-1, 1) if loss_name == "nMSE" else None
             
             y_pred = model(X)
-            loss = loss_fn(y_pred, y, iw)
+            loss = loss_fn(y_pred, y, iw, pi)
 
             running_loss += loss.item()
             progress_bar.set_postfix(loss=f"{loss.item():.4f}")
