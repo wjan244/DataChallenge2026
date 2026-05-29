@@ -26,10 +26,10 @@
 
 #== Run jobs ==
 # sbatch scripts/run_cluster.sbatch # copy the job number
-# tail -f logs/834974.log
-# squeue -j 834974
+# tail -f logs/8836891.log
+# squeue -j 834135
 # squeue -p 834135
-# cat logs/834974.log
+# cat logs/834135.log
 
 # rsync -vr DataChallenge2026.zip name@xxx:/home/infres/cmergny-25/DataChallenge2026/data
 
@@ -45,19 +45,23 @@
 
 echo "=== JOB START ==="
 
-cd ~/DataChallenge2026
+cd /home/infres/wjan-25/DataChallenge2026
 module load cuda/12.9
-uv sync
-# source ~/.bashrc
+
+# garantir que la racine est dans PYTHONPATH pour les imports src.*
+export PYTHONPATH=$(pwd):$PYTHONPATH
+
+# activer l'environnement Python
 source .venv/bin/activate
 
-uv run python main.py
+# synchroniser/installer si besoin (uv accessible depuis la venv)
+uv sync
 
+# exécuter une seule fois
+uv run python main.py
 
 echo "=== JOB END ==="
 echo "timestamp: $(date -Is)"
 
 # scancel 834049 -> arrêter je job
 # sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 --state=RUNNING,PENDING -> voir tous les jobs actifs
-# squeue -p 3090
-# squeue -p 3090 -t RUNNING
