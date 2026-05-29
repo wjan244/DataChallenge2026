@@ -1,4 +1,6 @@
-pip install --force-reinstall torch==2.2.1 torchvision==0.17.1 --index-url https://download.pytorch.org/whl/cu121
+Pour télécharger le Dataset Celeba:
+!wget https://stratus.binets.fr/s/jFHKwZbmmnKcBF4/download -O celeba.zip
+!unzip celeba.zip -d .
 
 
 ## Meeting notes

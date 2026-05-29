@@ -11,7 +11,7 @@ from src.metrics import metric_fn
 from src.models.models import get_model
 
 
-def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, prefix=None)->None:
+def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, prefix=None, method_kwargs: dict | None = None)->None:
 
     """
     Pipe d'évalualtion:
@@ -29,7 +29,8 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
     checkpoint_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
 
     # instanciation du modèle
-    model = get_model(cfg_mod, num_classes=1,method=method_FT)
+    method_kwargs = method_kwargs or {}
+    model = get_model(cfg_mod, num_classes=1, method=method_FT, **method_kwargs)
     
         # -> DEVICE
     model.load_state_dict(torch.load(checkpoint_path,map_location=DEVICE))
@@ -41,11 +42,22 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
         correct = 0
         total = 0
         with torch.inference_mode():
-            f1_metric = BinaryF1Score(threshold=0.5)
+    
+            f1_metric = BinaryF1Score(threshold=0.5).to(DEVICE)
             f1_scores = []
-            for X, y in val_loader:
+            for batch in val_loader:
+                # distinguer deux cas pour pouvoir faire l'évaluation de l'adaptation de domaine sur le Dataset du DataChallenge
+                if isinstance(batch, (list, tuple)):
+                    X = batch[0]
+                    y = batch[1]
+                # cas général
+                else:
+                    X, y = batch
                 X = X.to(DEVICE)
-                y = y.to(DEVICE).view(-1, 1)
+                
+                y = y.to(DEVICE).float()
+                y = y.squeeze() # supprimer les dimensions inutiles
+                y = y.view(-1, 1) # mettre sous forme d'une colonne
                 y_pred = model(X)
 
                 # calcul de la prédiction (binaire)
@@ -57,7 +69,8 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
 
                 # calcul f1_score
                 f1_score_batch = f1_metric(preds, y_int)
-                f1_scores.append(float(f1_score_batch))
+                # move to CPU and convert to float for aggregation/logging
+                f1_scores.append(float(f1_score_batch.detach().cpu()))
 
             # aggregation des métriques
             f1_score = float(sum(f1_scores) / len(f1_scores))

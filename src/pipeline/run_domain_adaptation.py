@@ -14,25 +14,33 @@ def run_domain_adaptation(cfg, file_name, timestamp, experiment_id, precedent_ru
     cfg_glob = cfg["globaux"]
     cfg_method = cfg["domain_adaptation_training"]
 
+    if cfg_method.get("run_execution", False) == True:
+        print(f"début d'entrainement par {cfg_method['method_FT']}")
+        with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_domain adaptation"):
+            get_celeba_train_loader = globals()[cfg_method["loader_factory"]]
+            get_celeba_val_loader = globals()[cfg_method["val_loader_factory"]]
+            get_challenge_val_loader = globals()[cfg_method["val_loader_challenge"]]
 
-    print(f"début d'entrainement par {cfg_method['method_FT']}")
-    with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_domain adaptation"):
-        get_celeba_train_loader = globals()[cfg_method["loader_factory"]]
-        get_celeba_val_loader = globals()[cfg_method["val_loader_factory"]]
+            train_loader = get_celeba_train_loader(batch_size=cfg_glob["BATCH_SIZE"],
+                                                   num_workers=NUM_WORKERS, model_name=cfg_mod,
+                                                   augmentation=cfg_method.get("augmentation", False))
 
+            val_loader = get_celeba_val_loader(batch_size=cfg_glob["BATCH_SIZE"],
+                                               num_workers=NUM_WORKERS, model_name=cfg_mod)
 
+            # obtenir le DataLoader du dataset Challenge (ne pas unpacker un DataLoader)
+            challenge_val_loader = get_challenge_val_loader(split=cfg_method["val_split"],
+                                                            batch_size=cfg_glob["BATCH_SIZE"],
+                                                            num_workers=NUM_WORKERS, model_name=cfg_mod)
 
-        train_loader = get_celeba_train_loader(batch_size=cfg_glob["BATCH_SIZE"],
-                                               num_workers=NUM_WORKERS,model_name=cfg_mod,
-                                               augmentation=cfg_method["augmentation"])
-        val_loader = get_celeba_val_loader(batch_size=cfg_glob["BATCH_SIZE"],
-                                              num_workers=NUM_WORKERS,model_name=cfg_mod)
-        
-        run_id, _, _, _, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id, precedent_method, prefix=None)
-        return_method = cfg_method["method_FT"]
-        
-        run_evaluation(timestamp=timestamp, val_loader=val_loader, method_FT=return_method, cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix=None)
+            run_id, _, _, _, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id, precedent_method, prefix=None)
+            return_method = cfg_method["method_FT"]
 
-    print(f"fin d'entrainement par {cfg_method['method_FT']}")
+            # évaluer sur CelebA puis sur le dataset Challenge
+            run_evaluation(timestamp=timestamp, val_loader=val_loader, method_FT=return_method, cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix="score sur Celeba", method_kwargs=cfg_method.get("method_kwargs", {}))
+            run_evaluation(timestamp=timestamp, val_loader=challenge_val_loader, method_FT=return_method, cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix="score sur Dataset Challenge", method_kwargs=cfg_method.get("method_kwargs", {}))
 
-    return run_id, return_method
+            print(f"fin d'entrainement par {cfg_method['method_FT']}")
+            return run_id, return_method
+    else:
+        return precedent_run_id, precedent_method

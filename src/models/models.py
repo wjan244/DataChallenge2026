@@ -73,15 +73,6 @@ def get_model(model_name: str, num_classes=1, method: str | None = None, weights
     
     # ajout de la sigmoïde au modèle chargé
     model = OcclusionModel(model)
-    # si aucune méthode spécifiée, retourner le modèle tel quel
-    if method is None:
-        return model
-    # accepter quelques alias courts éventuels puis valider
-    SHORT_METHODS = {"probing": "probing_training", "lora": "lora_training", "domain": "domain_adaptation"}
-    if method in SHORT_METHODS:
-        method = SHORT_METHODS[method]
-    if method not in METHOD_MAPPING:
-        raise ValueError(f"Unknown method {method!r}. Supported: {list(METHOD_MAPPING.keys())}")
     # injecter la méthode
     model = METHOD_MAPPING[method](model,**method_kwargs)
     return model

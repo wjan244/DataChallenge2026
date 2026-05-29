@@ -90,12 +90,23 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc="Entraînement")
         
         for batch_idx, batch in progress_bar:
-            X, y = batch[0].to(DEVICE), batch[1].to(DEVICE).view(-1, 1)
-            
-            #uniquement pour Dataset Challenge
-            iw = batch[4].to(DEVICE).view(-1, 1) if loss_name=="nLiteMSE" else None
-            iw, pi = batch[4].to(DEVICE).view(-1, 1), batch[5].to(DEVICE).view(-1, 1) if loss_name == "nMSE" else None
-            
+            X = batch[0].to(DEVICE)
+            # normalize y to shape [B,1]
+            y = batch[1].to(DEVICE).float()
+            y = y.squeeze()
+            y = y.view(-1, 1)
+
+            # fixer les coefficients par défaut
+            iw = None
+            pi = None
+
+            # extraction des coefficients en fonction de la loss appelée
+            if loss_name == "nLiteMSE":
+                    iw = batch[4].to(DEVICE).unsqueeze(1).float()
+            elif loss_name == "nMSE":
+                iw = batch[4].to(DEVICE).unsqueeze(1).float()
+                pi = batch[5].to(DEVICE).unsqueeze(1).float()
+
             y_pred = model(X)
             loss = loss_fn(y_pred, y, iw, pi)
 
@@ -113,12 +124,23 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         val_loss = 0
         with torch.inference_mode(): 
             for batch in val_loader:
-                
-                X_val, y_val = batch[0].to(DEVICE), batch[1].to(DEVICE).view(-1, 1)
-                iw_val = batch[4].to(DEVICE).view(-1, 1) if len(batch) == 5 else None
-                
+                X_val = batch[0].to(DEVICE)
+                # normalize y_val to shape [B,1]
+                y_val = batch[1].to(DEVICE).float()
+                y_val = y_val.squeeze()
+                y_val = y_val.view(-1, 1)
+
+                # validation: handle possible presence of iw/pi
+                iw_val = None
+                pi_val = None
+                if loss_name == "nLiteMSE":
+                    iw_val = batch[4].to(DEVICE).unsqueeze(1).float()
+                elif loss_name == "nMSE":
+                    iw_val = batch[4].to(DEVICE).unsqueeze(1).float()
+                    pi_val = batch[5].to(DEVICE).unsqueeze(1).float()
+                    
                 y_pred_val = model(X_val)
-                loss_v = loss_fn(y_pred_val, y_val, iw_val)
+                loss_v = loss_fn(y_pred_val, y_val, iw_val, pi_val)
                 val_loss += loss_v.item()
 
         final_val_loss = val_loss / len(val_loader)
