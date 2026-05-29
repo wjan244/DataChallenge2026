@@ -26,10 +26,10 @@
 
 #== Run jobs ==
 # sbatch scripts/run_cluster.sbatch # copy the job number
-# tail -f logs/836895.log
-# squeue -j 836895
-# squeue -p 836895
-# cat logs/834135.log
+# tail -f logs/836898.log
+# squeue -j 836898
+# squeue -p 836898
+# cat logs/836898.log
 
 # rsync -vr DataChallenge2026.zip name@xxx:/home/infres/cmergny-25/DataChallenge2026/data
 
@@ -62,6 +62,22 @@ echo "CWD: $(pwd)"
 echo "which python: $(which python)"
 python --version || true
 python -c "print('PYTHON_OK')" || true
+
+# Extra debug: afficher sys.path et tester l'import de 'src' dans le même interpréteur
+DEBUG_LOG=logs/debug_${SLURM_JOB_ID:-manual}.log
+echo "Running debug import check -> $DEBUG_LOG"
+python - <<'PY'
+import sys, pkgutil
+print('sys.path (head):', sys.path[:8])
+loader = pkgutil.find_loader('src')
+print('pkgutil.find_loader("src") ->', loader)
+try:
+	import src
+	print('import src OK, src.__file__ =', getattr(src, '__file__', None))
+except Exception as e:
+	print('import src FAILED:', repr(e))
+PY
+tail -n 200 "$DEBUG_LOG" || true
 
 # exécuter une seule fois et capturer la sortie dans un fichier spécifique au job
 LOGFILE=logs/uv_${SLURM_JOB_ID:-manual}.log
