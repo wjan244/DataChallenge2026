@@ -4,6 +4,7 @@ import time
 import torch
 import numpy as np
 import random
+import argparse
 
 ROOT = pathlib.Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -42,5 +43,10 @@ def main(file_name):
 
     
 if __name__ == "__main__":
-    main('beit3_base_patch16_224.yaml')
     
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="beit3_base_patch16_224.yaml",
+                        help="YAML filename inside config/models/")
+    args = parser.parse_args()
+    
+    main(args.config)

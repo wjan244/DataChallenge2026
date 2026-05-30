@@ -2,6 +2,7 @@ import mlflow
 import pandas as pd
 import torch 
 import torch.nn as nn
+import time
 
 from pathlib import Path
 from tqdm import tqdm
@@ -85,6 +86,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
 
     for n in range(num_epoch):
         print(f"Epoch {n+1}")
+        epoch_start = time.time()
         model.train()
         running_loss = 0
         progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc="Entraînement")
@@ -122,6 +124,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         # boucle d'évaluation
         model.eval()
         val_loss = 0
+        train_start = time.time()
         with torch.inference_mode(): 
             for batch in val_loader:
                 X_val = batch[0].to(DEVICE)
@@ -150,6 +153,9 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         mlflow.log_metric(key="train_loss", value=final_loss, step=n)
         mlflow.log_metric(key="val_loss", value=final_val_loss, step=n)
         
+        # log the time to run the epoch
+        epoch_time = time.time() - epoch_start
+        mlflow.log_metric("epoch_time_s", epoch_time, step=n)
         # update du scheduler
         scheduler.step()
 
@@ -190,6 +196,9 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     model.load_state_dict(torch.load(save_path))
     mlflow.log_artifact(local_path=str(save_path))
 
+    # log the total training time
+    mlflow.log_metric("total_train_time_s", time.time() - train_start)
+    
     # récupérer l'id de run_train (à injeter sur le run_train suivant)
     run_id = mlflow.active_run().info.run_id
 

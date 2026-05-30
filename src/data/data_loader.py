@@ -6,6 +6,9 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
 from src.config import*
+
+_PIN = DEVICE.type == "cuda"
+_PW  = NUM_WORKERS > 0
 from src.data.dataset import Dataset, ChallengeTrain, CelebA
 from src.data.data_utils import get_challenge_split
 from src.data.transforms import get_augmentation_finetuning_transforms,get_augmentation_pretrained_transforms
@@ -28,7 +31,8 @@ def get_challenge_train_loader(batch_size: int, num_workers: int = NUM_WORKERS, 
     # augmentation
     augmentation_transform = get_augmentation_finetuning_transforms() if augmentation==True else None
 
-    return DataLoader(standard_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    return DataLoader(standard_dataset, batch_size=batch_size, shuffle=True,
+                      num_workers=num_workers, pin_memory=_PIN, persistent_workers=_PW)
         
 
 def get_celeba_train_loader(batch_size: int, num_workers: int = NUM_WORKERS, model_name: str = None, augmentation: bool = None) -> DataLoader:
@@ -41,7 +45,8 @@ def get_celeba_train_loader(batch_size: int, num_workers: int = NUM_WORKERS, mod
 
     celeba_dataset = CelebA(split="train", transform=transform_pipeline,path="./data/celeba")
     
-    return DataLoader(celeba_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    return DataLoader(celeba_dataset, batch_size=batch_size, shuffle=True,
+                      num_workers=num_workers, pin_memory=_PIN, persistent_workers=_PW)
 
 
 def get_challenge_val_loader(split: str, batch_size: int, num_workers: int = NUM_WORKERS, model_name: str = None) -> DataLoader:
@@ -53,7 +58,8 @@ def get_challenge_val_loader(split: str, batch_size: int, num_workers: int = NUM
     val_transform = timm.data.create_transform(**data_config, is_training=False)
 
     val_set = Dataset(df_val, IMG_DIR, training=True, transform=val_transform)
-    return DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    return DataLoader(val_set, batch_size=batch_size, shuffle=False,
+                      num_workers=num_workers, pin_memory=_PIN, persistent_workers=_PW)
 
 def get_celeba_val_loader(batch_size: int, num_workers: int = NUM_WORKERS, model_name: str = None) -> DataLoader:
     """Génère le DataLoader de validation CelebA en utilisant la classe locale CelebA."""
@@ -65,7 +71,8 @@ def get_celeba_val_loader(batch_size: int, num_workers: int = NUM_WORKERS, model
         transform=val_transform,
         path="./data/celeba"
     )
-    return DataLoader(celeba_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    return DataLoader(celeba_dataset, batch_size=batch_size, shuffle=False,
+                      num_workers=num_workers, pin_memory=_PIN, persistent_workers=_PW)
 
 
 def get_challenge_test_loader(df_test: pd.DataFrame, batch_size: int, num_workers: int = NUM_WORKERS, model_name: str = None) -> DataLoader:
@@ -75,4 +82,5 @@ def get_challenge_test_loader(df_test: pd.DataFrame, batch_size: int, num_worker
 
     test_set = Dataset(df_test, IMG_DIR, training=False, transform=test_transform)
     
-    return DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    return DataLoader(test_set, batch_size=batch_size, shuffle=False,
+                      num_workers=num_workers, pin_memory=_PIN, persistent_workers=_PW)
