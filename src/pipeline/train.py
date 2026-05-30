@@ -84,6 +84,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     best_loss = float('inf')
     patience_counter = 0
 
+    train_start = time.time()
     for n in range(num_epoch):
         print(f"Epoch {n+1}")
         epoch_start = time.time()
@@ -124,7 +125,6 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         # boucle d'évaluation
         model.eval()
         val_loss = 0
-        train_start = time.time()
         with torch.inference_mode(): 
             for batch in val_loader:
                 X_val = batch[0].to(DEVICE)

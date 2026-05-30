@@ -8,6 +8,40 @@ from src.config import*
 from src.models.models import get_model
 
 
+def save_split_predictions(timestamp, loader, split_name, method_FT, cfg_mod, method_kwargs=None):
+    """Run inference on a labeled split; save filename/FaceOcclusion(GT)/pred/gender/iw to CSV."""
+    model_tag = f"{cfg_mod}_{method_FT}"
+    checkpoint_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
+
+    model = get_model(cfg_mod, num_classes=1, method=method_FT, **(method_kwargs or {}))
+    model.load_state_dict(torch.load(checkpoint_path, map_location=DEVICE))
+    model = model.to(DEVICE)
+    model.eval()
+
+    results_list = []
+    with torch.inference_mode():
+        for batch in tqdm(loader, desc=f"predict {split_name}"):
+            X = batch[0].to(DEVICE)
+            y_pred = model(X).view(-1)
+            y_true = batch[1].view(-1)
+            genders = batch[2]
+            filenames = batch[3]
+            iws = batch[4]
+            for i in range(len(X)):
+                results_list.append({
+                    'filename': filenames[i],
+                    'FaceOcclusion': float(y_true[i]),
+                    'pred': float(y_pred[i]),
+                    'gender': float(genders[i]),
+                    'iw': float(iws[i]),
+                })
+
+    results_df = pd.DataFrame(results_list)
+    save_path = SUBMISSION_DIR / f"{timestamp}_submission_{model_tag}" / f"{split_name}.csv"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    results_df.to_csv(save_path, index=False)
+
+
 def run_test(timestamp,test_loader,method_FT,cfg_mod, method_kwargs: dict | None = None)->None:
     """
     Pipe comple de test:
@@ -49,7 +83,8 @@ def run_test(timestamp,test_loader,method_FT,cfg_mod, method_kwargs: dict | None
 
     # sauvegarde
         # sauvegarde en local
-    submission_path = SUBMISSION_DIR / f"{timestamp}_submission_{model_tag}.csv"
+    submission_path = SUBMISSION_DIR / f"{timestamp}_submission_{model_tag}" / "test.csv"
+    submission_path.parent.mkdir(parents=True,exist_ok=True)
     results_df.to_csv(submission_path,index=False)
         # sauvegarde MLFlow
     mlflow.log_artifact(local_path=submission_path,artifact_path="submission")

@@ -52,7 +52,8 @@ src/
   data/
     dataset.py                  # Dataset, ChallengeTrain, CelebA — torch Dataset classes
     data_loader.py              # Factory functions returning DataLoaders
-                                #   ⚠ num_workers defaults to 0 everywhere (see TODO)
+                                #   num_workers=NUM_WORKERS, pin_memory (CUDA only),
+                                #   persistent_workers enabled by default
     data_utils.py               # get_challenge_split(): loads CSV, 80/20 split,
                                 #   applies distribution reweighting
     data_stats.py               # distribution_adaptation_reweight(): computes iw/pi columns
@@ -69,13 +70,14 @@ src/
     lora.py                     # LoRALinear: frozen base + trainable low-rank A·B
     loss.py                     # WeightedMSELoss (nMSE), WeightedLiteMSELoss (nLiteMSE),
                                 #   UniversalLossWrapper — routes by loss_name string
-                                #   ⚠ WeightedLiteMSELoss has a missing return (see TODO)
 
   pipeline/
     train.py                    # run_train(): Adam + CosineAnnealingLR, early stopping,
-                                #   MLflow logging, checkpoint saving
-    evaluation.py               # run_evaluation(): gender-split metric; F1/acc for
-                                #   domain-adaptation stage
+                                #   MLflow logging (incl. method_kwargs + epoch/total time),
+                                #   checkpoint saving
+    evaluation.py               # run_evaluation(index=): gender-split metric; F1/acc for
+                                #   domain-adaptation stage; index suffix avoids MLflow
+                                #   metric overwrite when called twice in the same run
     test.py                     # run_test(): loads best checkpoint → submission CSV
     run_domain_adaptation.py    # Stage 1 entry point
     run_probing.py              # Stage 2 entry point
@@ -85,8 +87,9 @@ config/
   pipeline_default.yaml         # Global defaults: SEED=42, BATCH_SIZE=32, N_SAMPLE=5000,
                                 #   PATIENCE=5, N_BINS=20, NUM_CLASSES=1
   models/
-    beit3_base_patch16_224.yaml # Per-model hyperparameter overrides
+    beit3_base_patch16_224.yaml        # Per-model hyperparameter overrides
     vit_tiny_patch16_224.yaml
+    vit_tiny_patch16_224_no_celeba.yaml  # Minimal run — skips CelebA stage
 
 scripts/
   run_cluster.sbatch            # SLURM job script for cluster training
@@ -143,8 +146,11 @@ Run everything: `python main.py`
 ## Running the Project
 
 ```bash
-# Full pipeline
+# Full pipeline (default config)
 python main.py
+
+# Choose a specific model config
+python main.py --config vit_tiny_patch16_224_no_celeba.yaml
 
 # Single-batch smoke test (fast sanity check, no GPU needed)
 python test.py
@@ -152,6 +158,46 @@ python test.py
 # Cluster (SLURM)
 sbatch scripts/run_cluster.sbatch
 ```
+
+---
+
+## Visualisation App
+
+An interactive Streamlit app for exploring dataset images and model predictions.
+
+**Run:**
+```bash
+uv run streamlit run src/viz/app.py
+```
+
+**Location:** `src/viz/app.py` — all viz code lives here.  
+**Stars:** `src/viz/stars.json` — persists starred images across runs (not tracked by git).
+
+### Sidebar controls
+| Control | Description |
+|---------|-------------|
+| Model run | Selects a submission dir: `submission/{timestamp}_submission_{model_tag}/` |
+| Split | `train` / `val` / `test` — controls which `{split}.csv` is loaded |
+| Gender | Filter by `Female (0)` / `Male (1)` / `All` (train/val only) |
+| Occlusion interval | Range slider [0 %, 100 %] applied to GT (train/val) or pred (test) |
+| Losses to compare | Multi-select, auto-populated from all `nn.Module` subclasses in `src/models/loss.py` |
+
+### Tabs
+- **Statistics** — overlaid histogram for all available splits, competition score + loss table for the filtered interval (train/val only)
+- **Picture** — random image viewer with GT, prediction, delta, and star/unstar button
+- **Stars** — tile grid of starred images filtered by current sidebar criteria
+
+### CSV format written by the pipeline
+After each training stage, `save_split_predictions()` (`src/pipeline/test.py`) saves:
+
+| File | Columns |
+|------|---------|
+| `submission/{run}/train.csv` | `filename, FaceOcclusion (GT), pred, gender, iw` |
+| `submission/{run}/val.csv`   | `filename, FaceOcclusion (GT), pred, gender, iw` |
+| `submission/{run}/test.csv`  | `filename, FaceOcclusion (pred, submission format)` |
+
+### Add a new loss
+Just add a new `nn.Module` subclass to `src/models/loss.py` — it appears automatically in the loss selector without any changes to the app.
 
 ---
 

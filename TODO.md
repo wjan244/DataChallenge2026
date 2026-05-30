@@ -61,6 +61,14 @@ Check off items as they are resolved.
 
 ## 🔵 Code Quality / Correctness
 
+- [x] **MLflow metrics overwritten when `run_evaluation()` called twice in one run**
+  - Was: domain adaptation evaluated on CelebA then Challenge in the same MLflow run — second call silently overwrote `f1_score` and `accuracy`
+  - Fixed in `evaluation.py`: added `index: str` parameter; metrics are now logged as `f1_score_CeleBa_evaluation` and `f1_score_Challenge_evaluation`
+  - `run_domain_adaptation.py` updated to pass the correct index to each call
+
+- [x] **`method_kwargs` (rank, alpha, dropout) not logged to MLflow**
+  - Fixed in `train.py`: `cfg_method_kwargs` is now merged into `hyper_params` before `mlflow.log_params()`
+
 - [ ] **`iw`/`pi` tensors not moved to DEVICE when loss changes**
   - File: [src/pipeline/train.py](src/pipeline/train.py)
   - `iw` and `pi` are only extracted and moved to DEVICE inside `if loss_name == "nMSE":` — if the loss name changes, they remain on CPU and will cause a device mismatch error at runtime
