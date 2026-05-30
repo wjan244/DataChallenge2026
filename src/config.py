@@ -21,6 +21,7 @@ CONFIG = BASE_DIR / "config"
 CONFIG_DEFAULT = CONFIG/"pipeline_default.yaml"
 CONFIG_MODELS = CONFIG/"models"
 
+
 # device
 if torch.backends.mps.is_available():
         DEVICE = torch.device("mps")         

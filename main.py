@@ -13,6 +13,8 @@ from src.config_utils import load_config
 from src.pipeline.run_domain_adaptation import run_domain_adaptation
 from src.pipeline.run_probing import run_probing
 from src.pipeline.run_lora import run_lora
+from src.pipeline.run_scratch import run_scratch
+
 
 SEED = load_config(CONFIG_DEFAULT)["globaux"]["SEED"]
 
@@ -32,9 +34,12 @@ def main(file_name):
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    run_id, method = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
-    run_id, method = run_probing(cfg,timestamp,experiment_id,precedent_run_id=run_id,precedent_method=method)
-    run_id, method = run_lora(cfg, timestamp, experiment_id, precedent_run_id=run_id, precedent_method=method)
+    if cfg.get("scratch_training", {}).get("run_execution") == True:
+        run_scratch(cfg, timestamp, experiment_id)
+    else:
+        run_id, method = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
+        run_id, method = run_probing(cfg,timestamp,experiment_id,precedent_run_id=run_id,precedent_method=method)
+        run_id, method = run_lora(cfg, timestamp, experiment_id, precedent_run_id=run_id, precedent_method=method)
 
     
 if __name__ == "__main__":

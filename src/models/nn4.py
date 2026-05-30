@@ -9,7 +9,24 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 LoadModel = False
 
 
+class ConvNet(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = torch.nn.Conv2d(1, 3, 3,padding='same')
+        self.pool = torch.nn.MaxPool2d(2, 2)
+        self.conv2 = torch.nn.Conv2d(3, 6, 3,padding='same')
+        self.conv3 = torch.nn.Conv2d(6, 12, 3,padding='same')
+        self.fc = torch.nn.Linear(6*6*12, 2)
 
+    def forward(self, x, writer=None, iter=0):
+        x = x.view(-1,1,48,48)
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = self.pool(F.relu(self.conv3(x)))
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = self.fc(x)
+
+        return x
 
 
 def train_one_iter(model, optimizer, image, label, writer, iter):
