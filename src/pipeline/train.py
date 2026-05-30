@@ -66,7 +66,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=num_epoch,eta_min=0,last_epoch=-1)
 
     # paramétrisatio MLFlow
-    hyper_params = {**cfg_glob, **cfg_method}
+    hyper_params = {**cfg_glob,**cfg_method_kwargs, **cfg_method}
     hyper_params.update({
         "model": cfg_mod,
         "model_tag": model_tag,

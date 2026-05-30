@@ -11,7 +11,7 @@ from src.metrics import metric_fn
 from src.models.models import get_model
 
 
-def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, prefix=None, method_kwargs: dict | None = None)->None:
+def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, prefix=None, method_kwargs: dict | None = None, index:str=None)->None:
 
     """
     Pipe d'évalualtion:
@@ -74,9 +74,10 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
             # aggregation des métriques
             f1_score = float(sum(f1_scores) / len(f1_scores))
             accuracy = correct / total 
-            # mlflow
-            mlflow.log_metric("f1_score", f1_score)
-            mlflow.log_metric("accuracy", accuracy)
+            # éviter que les métriques soient écrasées si évaluation sur deux Dataset (cas de Domain_Adaptation)
+            suffix = f"_{index}" if index else ""
+            mlflow.log_metric(f"f1_score{suffix}", f1_score)
+            mlflow.log_metric(f"accuracy{suffix}", accuracy)
             score = f1_score
         
     # gestion du cas général
@@ -103,9 +104,10 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
         results_male = results_df.loc[results_df["gender"] == 1.0]
         results_female = results_df.loc[results_df["gender"] == 0.0]
         score = metric_fn(results_female,results_male)
-        metric_name = f"{prefix}_val_score"
-        # mlflow
-        mlflow.log_metric(metric_name,score)
+    suffix = f"_{index}" if index else ""
+    metric_name = f"{prefix}_val_score{suffix}"
+    # loging mlflow
+    mlflow.log_metric(metric_name, score)
 
     # sauvegarde du score dans le journal (en local)
     log_path = HISTORY_DIR / f"{timestamp}_eval_history_{model_tag}.csv"

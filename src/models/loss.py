@@ -26,9 +26,12 @@ class WeightedLiteMSELoss(nn.Module):
 
     def forward(self, y_pred, y_true, iw):
         try:
-            (iw * (y_pred - y_true) ** 2).mean()
+            numerator = torch.sum(iw * (y_pred - y_true) ** 2)
+            denominator = torch.sum(iw)
         except ValueError:
-            print("coefficient de reweighting indéfinis")
+            print('coefficients mal définis')
+            
+        return numerator / (denominator)
 
 class UniversalLossWrapper(nn.Module):
     def __init__(self, base_loss):
