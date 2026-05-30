@@ -38,9 +38,10 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
 
     # gestion de l'adaptation de domaine
     if method_FT == "domain_adaptation":
-
+        
         with torch.inference_mode():
-    
+            correct =0
+            total = 0
             f1_metric = BinaryF1Score(threshold=0.5).to(DEVICE)
             #f1_scores = []
             for batch in val_loader:
