@@ -29,7 +29,7 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
     checkpoint_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
 
     # instanciation du modèle
-    model = get_model(cfg_mod, num_classes=1, method=method_FT, **method_kwargs)
+    model = get_model(cfg_mod, num_classes=1, method=method_FT, **(method_kwargs or {}))
     
         # -> DEVICE
     model.load_state_dict(torch.load(checkpoint_path,map_location=DEVICE))
