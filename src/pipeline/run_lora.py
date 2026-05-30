@@ -11,6 +11,7 @@ def run_lora(cfg, timestamp, experiment_id, precedent_run_id=None, precedent_met
     cfg_mod = cfg["model"]
     cfg_glob = cfg["globaux"]
     cfg_method = cfg["lora_training"]
+    loss_name = cfg_method.get("loss_name")
 
     if cfg_method["run_execution"]==True:
         print(f"début d'entrainement par {cfg_method['method_FT']}")
@@ -33,7 +34,7 @@ def run_lora(cfg, timestamp, experiment_id, precedent_run_id=None, precedent_met
 
             run_id, _, _, df_test, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id, precedent_method, prefix=None)
             
-            run_evaluation(timestamp=timestamp, val_loader=val_loader, method_FT=cfg_method["method_FT"], cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix=None, method_kwargs=cfg_method.get("method_kwargs"),index=None)
+            run_evaluation(timestamp=timestamp, val_loader=val_loader, loss_name=loss_name,method_FT=cfg_method["method_FT"], cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix=None, method_kwargs=cfg_method.get("method_kwargs"),index=None)
             return_method = cfg_method["method_FT"]
             test_loader = get_challenge_test_loader(df_test, cfg_glob["BATCH_SIZE"], NUM_WORKERS,model_name=cfg_mod)
             run_test(timestamp, test_loader, cfg_method["method_FT"],cfg_mod)
