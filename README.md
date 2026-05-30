@@ -1,7 +1,13 @@
-Pour télécharger le Dataset Celeba:
-!wget https://stratus.binets.fr/s/jFHKwZbmmnKcBF4/download -O celeba.zip
-!unzip celeba.zip -d .
+# Datachallenge WEC
 
+
+## Datasets
+
+### Celeba
+```
+!wget https://stratus.binets.fr/s/jFHKwZbmmnKcBF4/download -O celeba.zip
+unzip celeba.zip -d data/
+```
 
 ## Meeting notes
 
