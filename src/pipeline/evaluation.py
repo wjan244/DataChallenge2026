@@ -38,12 +38,11 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
 
     # gestion de l'adaptation de domaine
     if method_FT == "domain_adaptation":
-        correct = 0
-        total = 0
+
         with torch.inference_mode():
     
             f1_metric = BinaryF1Score(threshold=0.5).to(DEVICE)
-            f1_scores = []
+            #f1_scores = []
             for batch in val_loader:
                 # distinguer deux cas pour pouvoir faire l'évaluation de l'adaptation de domaine sur le Dataset du DataChallenge
                 if isinstance(batch, (list, tuple)):
@@ -67,13 +66,11 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
                 total += y_int.size(0)
 
                 # calcul f1_score
-                f1_score_batch = f1_metric(preds, y_int)
-                # move to CPU and convert to float for aggregation/logging
-                f1_scores.append(float(f1_score_batch.detach().cpu()))
+                f1_metric.update(preds,y_int)
 
-            # aggregation des métriques
-            f1_score = float(sum(f1_scores) / len(f1_scores))
+            f1_score = float(f1_metric.compute().cpu())
             accuracy = correct / total 
+            
             # éviter que les métriques soient écrasées si évaluation sur deux Dataset (cas de Domain_Adaptation)
             suffix = f"_{index}" if index else ""
             mlflow.log_metric(f"f1_score{suffix}", f1_score)
