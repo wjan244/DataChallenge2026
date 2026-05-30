@@ -13,8 +13,6 @@ from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossW
 from src.models.models import get_model
 
 
-LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLiteMSE":WeightedLiteMSELoss}
-
 def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method,
               precedent_run_id, precedent_method, prefix: str | None = None,) -> tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
     """
@@ -27,7 +25,9 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     - optimisation du learning rate avec un cosine scheduler
     - sauvegarde des poids/métriques/paramètres en local et sur le Dashboard MLFlow
     """
-   
+    # Loss mapping
+    LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLiteMSE":WeightedLiteMSELoss}
+
     # création des dossiers locaux
     CHECKPOINT_DIR.mkdir(parents=True,exist_ok=True)
     HISTORY_DIR.mkdir(parents=True,exist_ok=True)
@@ -67,7 +67,10 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=num_epoch,eta_min=0,last_epoch=-1)
 
     # paramétrisatio MLFlow
-    hyper_params = {**cfg_glob,**cfg_method_kwargs, **cfg_method}
+        # extraire le sous dictionnaire kwargs
+    kwargs = cfg_method.pop("method_kwargs") # coupe et colle
+    hyper_params = {**cfg_glob,**cfg_method,**kwargs} # fusion
+        
     hyper_params.update({
         "model": cfg_mod,
         "model_tag": model_tag,
