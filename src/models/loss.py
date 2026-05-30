@@ -26,9 +26,10 @@ class WeightedLiteMSELoss(nn.Module):
 
     def forward(self, y_pred, y_true, iw):
         try:
-            (iw * (y_pred - y_true) ** 2).mean()
-        except ValueError:
-            print("coefficient de reweighting indéfinis")
+            return (iw * (y_pred - y_true) ** 2).mean()
+        except ValueError as e:
+            print("coefficient de reweighting indéfinis", e)
+            return None
 
 class UniversalLossWrapper(nn.Module):
     def __init__(self, base_loss):

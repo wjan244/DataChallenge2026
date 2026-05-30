@@ -29,4 +29,4 @@ elif torch.cuda.is_available():
 else:
       DEVICE = torch.device("cpu")
 
-NUM_WORKERS = len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count()
+NUM_WORKERS = min(8,len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else os.cpu_count())
