@@ -1,18 +1,13 @@
-import sys
-import pathlib
 import time
 import torch
 import numpy as np
 import random
 import argparse
 
-ROOT = pathlib.Path(__file__).resolve().parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
 import dagshub
 import mlflow
 
+from datetime import datetime
 from src.config import*
 from src.config_utils import load_config
 from src.pipeline.run_domain_adaptation import run_domain_adaptation
@@ -35,7 +30,7 @@ def main(file_name):
     experiment = mlflow.set_experiment(experiment_name=experiment_name)
     experiment_id = experiment.experiment_id if experiment else mlflow.create_experiment(experiment_name)
 
-    timestamp = str(int(time.time()))
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     run_id, method = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
     run_id, method = run_probing(cfg,timestamp,experiment_id,precedent_run_id=run_id,precedent_method=method)

@@ -26,7 +26,7 @@
 
 #== Run jobs ==
 # sbatch scripts/run_cluster.sbatch # copy the job number
-# tail -f logs/836899.log
+# tail -f logs/836907.log
 # squeue -j 836898
 # squeue -p 836898
 # cat logs/836898.log
@@ -51,7 +51,6 @@ uv sync
 source .venv/bin/activate
 
 python main.py
-
 
 echo "=== JOB END ==="
 echo "timestamp: $(date -Is)"
