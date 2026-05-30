@@ -54,6 +54,6 @@ def distribution_adaptation_reweight(n_sample, df, test_distribution):
     df['D_KL'] = ratio_KL[bin_categorie]
 
     df_reweight = df.sample(n=n_sample, weights='D_KL', replace=False, random_state=42)
-    df_reweight.rename(columns={"D_KL": "iw"})
+    df_reweight = df_reweight.rename(columns={"D_KL": "iw"})
     return df_reweight, test_distribution, df_distribution
 

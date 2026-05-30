@@ -3,15 +3,19 @@ import timm
 import torch
 import mlflow
 
+from torch import nn
 from torchmetrics.classification import BinaryF1Score
 from tqdm import tqdm
 
 from src.config import*
-from src.metrics import metric_fn
+from src.metrics import metric_fn,error_fn
 from src.models.models import get_model
+from src.models.loss import WeightedLiteMSELoss,UniversalLossWrapper,WeightedMSELoss
 
+# Loss mapping
+LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLiteMSE":WeightedLiteMSELoss}
 
-def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, prefix=None, method_kwargs: dict | None = None, index:str=None)->None:
+def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None, cfg_mod=None, prefix=None, method_kwargs: dict | None = None, index:str=None)->None:
 
     """
     Pipe d'évalualtion:
@@ -38,9 +42,11 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
 
     # gestion de l'adaptation de domaine
     if method_FT == "domain_adaptation":
-
+        
         with torch.inference_mode():
-    
+            correct =0
+            total = 0
+
             f1_metric = BinaryF1Score(threshold=0.5).to(DEVICE)
             #f1_scores = []
             for batch in val_loader:
@@ -83,24 +89,101 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, cfg_mod=None, pre
         with torch.inference_mode():
 
             progress_bar = tqdm(enumerate(val_loader),total=len(val_loader),desc="validation")
-            for batch_idx, (X, y, gender, filename,*_) in progress_bar:
-                X= X.to(DEVICE)
+            for batch_idx, batch in progress_bar:
+                X = batch[0].to(DEVICE)
+                # normalize y to shape [B,1]
+                y = batch[1].to(DEVICE).float()
+                y = y.squeeze()
+                y = y.view(-1, 1)
+
+                # filename (strings/lists -> CPU)
+                filename = batch[3]
+                # gender: ensure float32 then move to DEVICE (MPS doesn't support float64)
+                gender = batch[2]
+                if torch.is_tensor(gender):
+                    # convert dtype on CPU then move
+                    gender = gender.to(torch.float32).to(DEVICE)
+                else:
+                    try:
+                        gender = torch.tensor(gender, dtype=torch.float32, device=DEVICE)
+                    except Exception:
+                        gender = torch.tensor(gender, dtype=torch.float32)
+                        gender = gender.to(DEVICE)
+
+
+                # fixer les coefficients par défaut
+                iw = None
+                pi = None
+
+                # extraction des coefficients en fonction de la loss appelée (s'ils existent)
+                if loss_name == "nLiteMSE" and len(batch) > 4:
+                    iw = batch[4]
+
+                elif loss_name == "nMSE" and len(batch) > 5:
+                    iw = batch[4]
+                    pi = batch[5]
+
+                # normaliser iw/pi en tenseurs float32 sur DEVICE si présents
+                def _to_tensor_on_device(x):
+                    if x is None:
+                        return None
+                    if torch.is_tensor(x):
+                        return x.to(torch.float32).to(DEVICE)
+                    try:
+                        return torch.tensor(x, dtype=torch.float32, device=DEVICE)
+                    except Exception:
+                        # fallback: create on CPU then move
+                        return torch.tensor(x, dtype=torch.float32).to(DEVICE)
+
+                iw = _to_tensor_on_device(iw)
+                pi = _to_tensor_on_device(pi)
+
+                # prédictions
                 y_pred = model(X)
 
+                # helper pour récupérer la valeur scalaire de manière sûre
+                def _get_item(arr, idx):
+                    if arr is None:
+                        return None
+                    if torch.is_tensor(arr):
+                        return float(arr[idx].cpu())
+                    try:
+                        return float(arr[idx])
+                    except Exception:
+                        return None
+
                 for i in range(len(X)):
-                    results_list.append({
+                    iw_val = _get_item(iw, i)
+                    pi_val = _get_item(pi, i)
+                    combined = None
+                    if (iw_val is not None) and (pi_val is not None):
+                        combined = float(iw_val * pi_val)
+
+                    row = {
                         'filename': filename[i],
-                        'pred': float(y_pred[i]),
-                        'FaceOcclusion': float(y[i]),
-                        'gender': float(gender[i])
-                    })
+                        'pred': float(y_pred[i].cpu()),
+                        'FaceOcclusion': float(y[i].cpu()),
+                        'gender': float(gender[i].cpu()),
+                        'iw': iw_val,
+                        'pi': pi_val,
+                        'combined_weights': combined
+                    }
+                    results_list.append(row)
                     
         results_df = pd.DataFrame(results_list)
 
         # evaluation
         results_male = results_df.loc[results_df["gender"] == 1.0]
         results_female = results_df.loc[results_df["gender"] == 0.0]
-        score = metric_fn(results_female,results_male)
+
+        # prise en compte des poids pi et iw pour l'évaluation: construire des vecteurs w_female et w_male si disponibles
+        if "combined_weights" in results_df.columns and results_df["combined_weights"].notna().any():
+            w_female = results_female["combined_weights"].to_numpy() if not results_female.empty else None
+            w_male = results_male["combined_weights"].to_numpy() if not results_male.empty else None
+            score = metric_fn(results_female, results_male, w=(w_female, w_male))
+        else:
+            score = metric_fn(results_female, results_male, w=None)
+        
     suffix = f"_{index}" if index else ""
     metric_name = f"{prefix}_val_score{suffix}"
     # loging mlflow
