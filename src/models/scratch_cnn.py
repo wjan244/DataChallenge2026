@@ -10,6 +10,8 @@ import numpy as np
 # load weight
 
 def _init_weights(self):
+    rng_state = torch.get_rng_state()
+    torch.seed()
     for m in self.modules():
         if isinstance(m, torch.nn.Conv2d):
             torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -21,6 +23,7 @@ def _init_weights(self):
         elif isinstance(m, torch.nn.Linear):
             torch.nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
             torch.nn.init.zeros_(m.bias)
+    torch.set_rng_state(rng_state)
 
 class _ConvBlock(torch.nn.Module):
     def __init__(self,in_channels, out_channels, dropout):
