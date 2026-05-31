@@ -14,7 +14,8 @@ def run_scratch(cfg, timestamp, experiment_id, precedent_method=None): #preceden
 
     if cfg_method["run_execution"]==True:
         print(f"début d'entrainement par {cfg_method['method_FT']}")
-        with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_{cfg_method['method_FT']}"):
+        with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_{cfg_method['method_FT']}") as run:
+            print(f"MLflow run: {mlflow.get_tracking_uri()}/#/experiments/{experiment_id}/runs/{run.info.run_id}")
             get_challenge_train_loader = globals()[cfg_method["loader_factory"]]
             get_challenge_val_loader = globals()[cfg_method["val_loader_factory"]]
 
@@ -27,7 +28,17 @@ def run_scratch(cfg, timestamp, experiment_id, precedent_method=None): #preceden
 
             run_id, _, _, df_test, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id=None, precedent_method=None, prefix=None)
             
-            run_evaluation(timestamp=timestamp, val_loader=val_loader, method_FT=cfg_method["method_FT"], cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix=None, method_kwargs=cfg_method.get("method_kwargs"),index=None)
+            run_evaluation(
+                    timestamp=timestamp,
+                    val_loader=val_loader,
+                    method_FT=cfg_method["method_FT"],
+                    cfg_glob=cfg_glob,
+                    loss_name=cfg_method["loss_name"],
+                    cfg_mod=cfg_mod,
+                    prefix="scratch",
+                    method_kwargs=cfg_method.get("method_kwargs"),
+                    index=None
+                )
             return_method = cfg_method["method_FT"]
             test_loader = get_challenge_test_loader(df_test, cfg_glob["BATCH_SIZE"], NUM_WORKERS,model_name=cfg_mod)
             run_test(timestamp, test_loader, cfg_method["method_FT"],cfg_mod)

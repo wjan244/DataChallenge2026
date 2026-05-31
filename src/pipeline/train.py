@@ -61,7 +61,8 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     # -> DEVICE
     model = model.to(DEVICE)
     
-    if num_epoch > 3 & cfg_glob.get("COMPILE",False) :
+    if cfg_glob.get("COMPILE",False) :
+        print("Compiling model")
         # compile for faster run but first epoch is slower
         if DEVICE.type == 'mps':
             model = torch.compile(model, backend="aot_eager")
@@ -98,7 +99,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
 
     for n in range(num_epoch):
         epoch_start = time.time()
-        print(f"Epoch {n+1}")
+        print(f"Epoch {n+1}/{num_epoch}")
         model.train()
         running_loss = 0
         progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc="Entraînement")
@@ -211,7 +212,12 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
 
     # sauvegarde des poids sur MLFlow (si existants)
     if save_path.exists():
-        model.load_state_dict(torch.load(save_path))
+        # handle compiled models
+        if hasattr(model, '_orig_mod'):
+            model._orig_mod.load_state_dict(torch.load(save_path))
+        else:
+            model.load_state_dict(torch.load(save_path))
+    
         mlflow.log_artifact(local_path=str(save_path))
 
     # log the total training time

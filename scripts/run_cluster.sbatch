@@ -50,8 +50,12 @@ uv sync
 # source ~/.bashrc
 source .venv/bin/activate
 
-echos "args: $*"
-python main.py "$@"
+echo "args: $*"
+if [ $# -eq 0 ]; then
+  python main.py
+else
+  python main.py --config "$@"
+fi
 
 echo "=== JOB END ==="
 echo "timestamp: $(date -Is)"

@@ -15,7 +15,8 @@ def run_lora(cfg, timestamp, experiment_id, precedent_run_id=None, precedent_met
 
     if cfg_method["run_execution"]==True:
         print(f"début d'entrainement par {cfg_method['method_FT']}")
-        with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_{cfg_method['method_FT']}"):
+        with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_{cfg_method['method_FT']}") as run:
+            print(f"MLflow run: {mlflow.get_tracking_uri()}/#/experiments/{experiment_id}/runs/{run.info.run_id}")
             get_challenge_train_loader = globals()[cfg_method["loader_factory"]]
             get_challenge_val_loader = globals()[cfg_method["val_loader_factory"]]
 

@@ -7,6 +7,14 @@ import argparse
 import dagshub
 import mlflow
 
+# torch optim
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
+torch.set_float32_matmul_precision('high')  # or 'medium'
+import logging
+logging.getLogger("torch._dynamo").setLevel(logging.ERROR)
+# end torch optim
+
 from datetime import datetime
 from src.config import*
 from src.config_utils import load_config
@@ -17,8 +25,9 @@ from src.pipeline.run_scratch import run_scratch
 
 
 SEED = load_config(CONFIG_DEFAULT)["globaux"]["SEED"]
-torch.set_float32_matmul_precision('high')  # or 'medium'
 
+
+# seeds
 random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -32,6 +41,7 @@ def main(file_name):
     experiment_name = "DataChallenge_2026"
     experiment = mlflow.set_experiment(experiment_name=experiment_name)
     experiment_id = experiment.experiment_id if experiment else mlflow.create_experiment(experiment_name)
+    print(f"MLflow experiment: {mlflow.get_tracking_uri()}/#/experiments/{experiment_id}")
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 

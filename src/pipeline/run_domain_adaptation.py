@@ -17,7 +17,8 @@ def run_domain_adaptation(cfg, file_name, timestamp, experiment_id, precedent_ru
     if cfg_method["run_execution"]==True:
 
         print(f"début d'entrainement par {cfg_method['method_FT']}")
-        with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_domain adaptation"):
+        with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_domain adaptation") as run:
+            print(f"MLflow run: {mlflow.get_tracking_uri()}/#/experiments/{experiment_id}/runs/{run.info.run_id}")
             get_celeba_train_loader = globals()[cfg_method["loader_factory"]]
             get_celeba_val_loader = globals()[cfg_method["val_loader_factory"]]
             get_challenge_val_loader = globals()[cfg_method["val_loader_challenge"]]

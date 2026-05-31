@@ -9,9 +9,9 @@ globaux:
 scratch_training:
   run_execution: True
   loss_name: "nMSE"
-  learning_rate: 1.0e-3
-  l2_weight_decay: 1.0e-2
-  num_epoch: 4
+  learning_rate: 1.0e-2
+  l2_weight_decay: 1.0e-3
+  num_epoch: 50
   augmentation: True
   method_FT: "scratch_training"
   loader_factory: "get_challenge_train_loader"
