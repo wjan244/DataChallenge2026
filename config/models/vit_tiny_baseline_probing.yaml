@@ -7,6 +7,7 @@ globaux:
   NUM_CLASSES: 1
   PATIENCE: 3
   BATCH_SIZE: 256
+  COMPILE: True
 
 # CelebA pre-training skipped — start directly from ImageNet weights
 domain_adaptation_training:
