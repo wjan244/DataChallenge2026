@@ -17,6 +17,7 @@ from src.pipeline.run_scratch import run_scratch
 
 
 SEED = load_config(CONFIG_DEFAULT)["globaux"]["SEED"]
+torch.set_float32_matmul_precision('high')  # or 'medium'
 
 random.seed(SEED)
 np.random.seed(SEED)
