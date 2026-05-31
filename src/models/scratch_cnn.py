@@ -25,18 +25,18 @@ def _init_weights(self):
 class _ConvBlock(torch.nn.Module):
     def __init__(self,in_channels, out_channels, dropout):
         super().__init__()
-        self.conv = torch.nn.Conv2d(in_channels, out_channels, 3,padding='same')
+        self.conv = torch.nn.Conv2d(in_channels, out_channels, 3, stride=2, padding=1, padding_mode='circular')
         self.bn = torch.nn.BatchNorm2d(out_channels) # cause issues on MPs with compile?
         self.activation = F.relu        
         self.drop = torch.nn.Dropout2d(p=dropout)
-        self.pool = torch.nn.MaxPool2d(2, 2)
+        # self.pool = torch.nn.MaxPool2d(2, 2)
 
     def forward(self, x):
         x = self.conv(x)
         x = self.bn(x)
         x = self.activation(x)
         x = self.drop(x)
-        x = self.pool(x)
+        #x = self.pool(x)
         
         return x
 

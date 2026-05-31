@@ -39,7 +39,6 @@ def run_lora(cfg, timestamp, experiment_id, precedent_run_id=None, precedent_met
             test_loader = get_challenge_test_loader(df_test, cfg_glob["BATCH_SIZE"], NUM_WORKERS,model_name=cfg_mod)
             run_test(timestamp, test_loader, cfg_method["method_FT"],cfg_mod)
             save_split_predictions(timestamp, train_loader, "train", cfg_method["method_FT"], cfg_mod, cfg_method.get("method_kwargs"))
-            save_split_predictions(timestamp, val_loader, "val", cfg_method["method_FT"], cfg_mod, cfg_method.get("method_kwargs"))
 
         print(f"fin d'entrainement par {cfg_method['method_FT']}")
 

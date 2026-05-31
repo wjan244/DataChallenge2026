@@ -1,7 +1,7 @@
 model: "scratch_cnn"
 
 globaux:
-  BATCH_SIZE: 128
+  BATCH_SIZE: 256
   PATIENCE: 10
   VERBOSE: "WARNING"   # set to DEBUG to see step-by-step training logs
 
@@ -10,7 +10,7 @@ scratch_training:
   loss_name: "nMSE"
   learning_rate: 1.0e-3
   l2_weight_decay: 1.0e-2
-  num_epoch: 1
+  num_epoch: 50
   augmentation: True
   method_FT: "scratch_training"
   loader_factory: "get_challenge_train_loader"
