@@ -179,7 +179,9 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
             best_loss = final_val_loss
             patience_counter = 0
             print(f"modèle sauvegardé à l'époque {n+1} - Val Loss: {final_val_loss:.4f}")
-            torch.save(model.state_dict(), save_path)
+            state_dict = model._orig_mod.state_dict() if hasattr(model, '_orig_mod') else model.state_dict()
+            torch.save(state_dict, save_path)
+            #torch.save(model.state_dict(), save_path)
         else:
             patience_counter += 1
 
