@@ -61,7 +61,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     # -> DEVICE
     model = model.to(DEVICE)
     
-    if num_epoch > 3:
+    if num_epoch > 3 & cfg_glob.get("COMPILE",False) :
         # compile for faster run but first epoch is slower
         if DEVICE.type == 'mps':
             model = torch.compile(model, backend="aot_eager")

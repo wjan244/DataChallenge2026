@@ -50,12 +50,13 @@ uv sync
 # source ~/.bashrc
 source .venv/bin/activate
 
-python main.py
+echos "args: $*"
+python main.py "$@"
 
 echo "=== JOB END ==="
 echo "timestamp: $(date -Is)"
 
 
 
-# scancel 834049 -> arrêter je job
+# scancel 834049 -> arrêter le job
 # sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 --state=RUNNING,PENDING -> voir tous les jobs actifs
