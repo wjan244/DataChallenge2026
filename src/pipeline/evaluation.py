@@ -185,14 +185,18 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None,
         if "combined_weights" in results_df.columns and results_df["combined_weights"].notna().any():
             w_female = results_female["combined_weights"].to_numpy() if not results_female.empty else None
             w_male = results_male["combined_weights"].to_numpy() if not results_male.empty else None
+            err_female = error_fn(results_female, w_female)
+            err_male = error_fn(results_male, w_male)
             score = metric_fn(results_female, results_male, w=(w_female, w_male))
         else:
+            err_female = error_fn(results_female, None)
+            err_male = error_fn(results_male, None)
             score = metric_fn(results_female, results_male, w=None)
-        
+
     suffix = f"_{index}" if index else ""
-    metric_name = f"{prefix}_val_score{suffix}"
-    # loging mlflow
-    mlflow.log_metric(metric_name, score)
+    mlflow.log_metric(f"{prefix}_val_score{suffix}", score)
+    mlflow.log_metric(f"{prefix}_err_female{suffix}", err_female)
+    mlflow.log_metric(f"{prefix}_err_male{suffix}", err_male)
 
     # sauvegarde du score dans le journal (en local)
     log_path = HISTORY_DIR / f"{timestamp}_eval_history_{model_tag}.csv"
