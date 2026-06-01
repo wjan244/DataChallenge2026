@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#SBATCH --time=25:00:00
-#SBATCH --cpus-per-task=10 # nber of env = #cpus - 2 (main process + OS)
+#SBATCH --time=30:00:00
+#SBATCH --cpus-per-task=8 # nber of env = #cpus - 2 (main process + OS)
 #SBATCH --ntasks=1
 #SBATCH --mem=64G 
 ##SBATCH --partition 3090
 #SBATCH --partition P100
-#SBATCH --gpus 2
+#SBATCH --gpus 1
 
 #SBATCH --acctg-freq=task=10
 #SBATCH --job-name=test
@@ -41,7 +41,10 @@
 # rm uv.lock
 # module load cuda/12.9
 # uv sync
-# instercative session
+# launch interactive session
+# scancel 834049 -> arrêter le job
+# sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 --state=RUNNING,PENDING -> voir tous les jobs actifs
+
 
 echo "=== JOB START ==="
 
@@ -59,8 +62,3 @@ fi
 
 echo "=== JOB END ==="
 echo "timestamp: $(date -Is)"
-
-
-
-# scancel 834049 -> arrêter le job
-# sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 --state=RUNNING,PENDING -> voir tous les jobs actifs
