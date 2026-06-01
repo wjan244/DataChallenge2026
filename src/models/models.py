@@ -6,7 +6,7 @@ from torch import nn
 from torchinfo import summary
 
 from src.models.finetuning import inject_linear_mlp_probing,inject_lora_transformer
-
+from src.config import DEVICE
 class OcclusionModel(nn.Module):
     """
     - instancie le modèle défini dans config.py
@@ -73,8 +73,16 @@ def get_model(model_name: str, num_classes=1, method: str | None = None, weights
     
     # ajout de la sigmoïde au modèle chargé
     model = OcclusionModel(model)
+
     # injecter la méthode
     model = METHOD_MAPPING[method](model,**method_kwargs)
+
+    # si des poids sont fournis (artifact/chemin) charger avant d'injecter la méthode
+    if weights is not None:
+        state = torch.load(weights, map_location=DEVICE)
+        model.load_state_dict(state, strict=False)
+        print("chargement des poids de l'étape précédente")
+        
     return model
 
 
