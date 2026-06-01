@@ -84,10 +84,9 @@ Check off items as they are resolved.
   - Patches `DataLoader.__iter__` and `run_evaluation` at the class/module level — fragile across refactors
   - Fix: add a `max_batches` parameter to `run_train()` and a `dry_run` flag to `run_evaluation()`
 
-- [ ] **`torch.compile()` not used**
-  - File: [src/models/models.py](src/models/models.py) — after model is constructed
-  - `torch.compile()` (PyTorch ≥ 2.0) provides free speed on CUDA and MPS with one line
-  - Fix: add `model = torch.compile(model)` in `get_model()`, guarded by a config flag
+- [x] **`torch.compile()` not used**
+  - Added in `run_cnn_ft.py` `_train_phase()`, guarded by `cfg_glob["COMPILE"]`
+  - Still missing in the main `run_train()` path ([src/pipeline/train.py](src/pipeline/train.py)) — apply the same pattern there for ViT/scratch pipelines
 
 ---
 

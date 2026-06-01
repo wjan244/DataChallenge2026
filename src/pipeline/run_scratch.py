@@ -5,6 +5,7 @@ from src.config import *
 from src.data.data_loader import*
 from src.pipeline.test import run_test, save_split_predictions
 from src.pipeline.train import run_train
+from src.config import CHECKPOINT_DIR
 
 
 def run_scratch(cfg, timestamp, experiment_id, precedent_method=None): #precedent_run_id=None,
@@ -26,7 +27,10 @@ def run_scratch(cfg, timestamp, experiment_id, precedent_method=None): #preceden
             val_loader = get_challenge_val_loader(split="val_samp",batch_size=cfg_glob["BATCH_SIZE"],
                                                 num_workers=NUM_WORKERS,model_name=cfg_mod)
 
-            run_id, _, _, df_test, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id=None, precedent_method=None, prefix=None)
+            ckpt_name = cfg_method.get("pretrained_checkpoint")
+            ckpt_path = CHECKPOINT_DIR / ckpt_name if ckpt_name else None
+
+            run_id, _, _, df_test, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id=None, precedent_method=None, prefix=None, pretrained_checkpoint_path=ckpt_path)
             
             run_evaluation(
                     timestamp=timestamp,

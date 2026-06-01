@@ -3,16 +3,16 @@ model: 'tf_efficientnetv2_s.in21k'
 globaux:
   SEED: 42
   NUM_CLASSES: 1
-  PATIENCE: 10
-  BATCH_SIZE: 128
+  PATIENCE: 11
+  BATCH_SIZE: 32
   VERBOSE: "WARNING"
 
 cnn_ft_training:
   run_execution: True
   loss_name: "nMSE"
   learning_rate: 1.0e-3
-  num_epoch_head: 5
-  num_epoch_per_phase: 10
+  num_epoch_head: 1
+  num_epoch_per_phase: 1
   n_phases: 3
   lr_decay_factor: 0.1
   augmentation: True

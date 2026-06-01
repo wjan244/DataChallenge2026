@@ -38,7 +38,7 @@ Implemented in [src/metrics.py](src/metrics.py): `error_fn()` and `metric_fn()`.
 ## Code Architecture
 
 ```
-main.py                         # Runs the 3-stage pipeline OR scratch training depending on config
+main.py                         # Runs the 3-stage pipeline, scratch, or CNN finetuning depending on config
 test.py                         # Single-batch smoke test (monkey-patches DataLoader)
 
 src/
@@ -86,6 +86,8 @@ src/
     run_probing.py              # Stage 2 entry point
     run_lora.py                 # Stage 3 entry point
     run_scratch.py              # Scratch entry point (single stage, no checkpoint chaining)
+    run_cnn_ft.py               # CNN finetuning entry point: head warmup → progressive block
+                                #   unfreezing; all phases in a single MLflow run
 
 config/
   pipeline_default.yaml         # Global defaults: SEED=42, BATCH_SIZE=32, N_SAMPLE=5000,
@@ -95,6 +97,7 @@ config/
     vit_tiny_patch16_224.yaml
     vit_tiny_patch16_224_no_celeba.yaml  # Minimal run — skips CelebA stage
     cnn_4l.yaml                        # 4-layer ConvNet trained from scratch
+    efficient_net.yaml                 # EfficientNetV2-S finetuned via CNN finetuning pipeline
 
 scripts/
   run_cluster.sbatch            # SLURM job script for cluster training
@@ -108,7 +111,10 @@ scripts/
 
 ## Pipelines
 
-`main.py` selects the pipeline based on the config: if `scratch_training.run_execution: True`, it runs the scratch pipeline; otherwise it runs the 3-stage transformer pipeline.
+`main.py` selects the pipeline based on the config:
+- `scratch_training.run_execution: True` → scratch pipeline
+- `cnn_ft_training.run_execution: True` → CNN finetuning pipeline
+- otherwise → 3-stage transformer pipeline
 
 ### 3-Stage Pipeline (pretrained ViT/BEiT)
 
@@ -124,8 +130,20 @@ Run IDs are chained: each stage passes `precedent_run_id` so the next stage load
 
 Single stage: `run_scratch.py` trains `ConvNet` from random init with all parameters unfrozen. No checkpoint chaining. Triggered by `scratch_training.run_execution: True` in the config.
 
+### CNN Finetuning Pipeline (pretrained CNN — e.g. EfficientNet)
+
+Single MLflow run, multiple internal phases in `run_cnn_ft.py`. Triggered by `cnn_ft_training.run_execution: True`.
+
+| Phase | What happens |
+|---|---|
+| 0 — Head warmup | Backbone fully frozen, only MLP head trains at `learning_rate` |
+| 1..n_phases | Progressively unfreeze top blocks (`ceil(total_blocks / n_phases)` per phase), LR = `learning_rate × lr_decay_factor^phase` |
+
+Key config keys (under `cnn_ft_training`): `learning_rate`, `num_epoch_head`, `num_epoch_per_phase`, `n_phases`, `lr_decay_factor`. Block count per phase is computed automatically from the model. Requires `method_kwargs.probing_type` and `method_kwargs.hidden_size` for the MLP head.
+
 Run everything: `python main.py`  
-Run scratch CNN: `python main.py --config cnn_4l.yaml`
+Run scratch CNN: `python main.py --config cnn_4l.yaml`  
+Run CNN finetuning: `python main.py --config efficient_net.yaml`
 
 ---
 

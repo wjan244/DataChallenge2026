@@ -8,6 +8,7 @@ globaux:
 
 scratch_training:
   run_execution: True
+  pretrained_checkpoint: "2026-06-01_13-20-33_resnet18_scratch_training.pt"
   loss_name: "nMSE"
   learning_rate: 1.0e-4
   l2_weight_decay: 1.0e-3

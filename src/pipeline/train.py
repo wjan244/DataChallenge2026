@@ -18,7 +18,8 @@ LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLit
 
 
 def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method,
-              precedent_run_id, precedent_method, prefix: str | None = None,) -> tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
+              precedent_run_id, precedent_method, prefix: str | None = None,
+              pretrained_checkpoint_path: Path | None = None) -> tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
     """
     Pipe d'entrainement complet du modèle défini dans config.py:
     - extraire les poids du run_train précédent
@@ -58,6 +59,13 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     # instancier le modèle
     cfg_method_kwargs = cfg_method.get("method_kwargs") or {}
     model = get_model(cfg_mod, num_classes=1, method=method_FT, weights=weights, **cfg_method_kwargs)
+
+    if pretrained_checkpoint_path is not None:
+        state = torch.load(pretrained_checkpoint_path, map_location="cpu")
+        model.load_state_dict(state, strict=False)
+        mlflow.log_param("pretrained_checkpoint", pretrained_checkpoint_path.name)
+        print(f"Loaded weights from {pretrained_checkpoint_path.name}")
+
     # -> DEVICE
     model = model.to(DEVICE)
     
@@ -79,11 +87,15 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     
     # paramétrisatio MLFlow
     hyper_params = {**cfg_glob, **{k: v for k, v in cfg_method.items() if k != "method_kwargs"}, **cfg_method_kwargs}
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     hyper_params.update({
         "model": cfg_mod,
         "model_tag": model_tag,
         "time_stamp": timestamp,
-        "prefix": prefix
+        "prefix": prefix,
+        "total_params": total_params,
+        "trainable_params": trainable_params,
     })
     mlflow.log_params(hyper_params)
     
