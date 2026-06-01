@@ -5,6 +5,8 @@ import torch
 from torch import nn
 from torchinfo import summary
 
+from src.models import CUSTOM_MODELS
+from src.models.scratch_cnn import ConvNet
 from src.models.finetuning import inject_linear_mlp_probing,inject_lora_transformer
 
 class OcclusionModel(nn.Module):
@@ -47,6 +49,11 @@ def _setup_probing(model: nn.Module, rank: int = 8, alpha: int = 16,
             param.requires_grad = False
     return model
 
+def _setup_scratch(model: nn.Module, **kwargs) -> nn.Module:
+    for param in model.parameters():
+        param.requires_grad=True
+    return model
+
 def _setup_lora_finetuning(model: nn.Module, rank: int = 8, alpha: int = 16, dropout: float = 0.0, **kwargs) -> nn.Module:
     # injecter les poids LoRA si pas déja prsents (une seule injection)
     if not any("lora_" in name for name, _ in model.named_parameters()):
@@ -64,12 +71,17 @@ def get_model(model_name: str, num_classes=1, method: str | None = None, weights
     - Linear_probing
     - LoRA
     """
-    METHOD_MAPPING = {"domain_adaptation":_setup_domain_adaptation,"probing_training":_setup_probing,"lora_training":_setup_lora_finetuning} 
+    METHOD_MAPPING = {"scratch_training":_setup_scratch, "domain_adaptation":_setup_domain_adaptation,"probing_training":_setup_probing,"lora_training":_setup_lora_finetuning} 
+
     # récupérer le modèle
-    model = timm.create_model( # timm permet de donner accés à quasiment tous les modèle. Il suffit juste de spécifier le bon nom.
-        model_name,
-        pretrained=True,
-        num_classes=num_classes)
+    
+    if model_name in CUSTOM_MODELS:
+        model = CUSTOM_MODELS[model_name](num_classes=num_classes)
+    else:          
+        model = timm.create_model( # timm permet de donner accés à quasiment tous les modèle. Il suffit juste de spécifier le bon nom.
+            model_name,
+            pretrained=True,
+            num_classes=num_classes)
     
     # ajout de la sigmoïde au modèle chargé
     model = OcclusionModel(model)
@@ -79,11 +91,12 @@ def get_model(model_name: str, num_classes=1, method: str | None = None, weights
 
 
 if __name__ == "__main__":
-    from src.config_utils import load_config
-    
+    from src.config_utils import load_config    
     cfg = load_config("beit3_base_patch16_224.yaml")
-    
+
     # On teste en passant le dictionnaire d'hyperparamètres du YAML via **
+    # if scratch model, instantiate model
+
     model = get_model(
         model_name=cfg["model"], 
         num_classes=1, 

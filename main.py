@@ -7,15 +7,27 @@ import argparse
 import dagshub
 import mlflow
 
+# torch optim
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
+torch.set_float32_matmul_precision('high')  # or 'medium'
+import logging
+logging.getLogger("torch._dynamo").setLevel(logging.ERROR)
+# end torch optim
+
 from datetime import datetime
 from src.config import*
 from src.config_utils import load_config
 from src.pipeline.run_domain_adaptation import run_domain_adaptation
 from src.pipeline.run_probing import run_probing
 from src.pipeline.run_lora import run_lora
+from src.pipeline.run_scratch import run_scratch
+
 
 SEED = load_config(CONFIG_DEFAULT)["globaux"]["SEED"]
 
+
+# seeds
 random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -29,12 +41,16 @@ def main(file_name):
     experiment_name = "DataChallenge_2026"
     experiment = mlflow.set_experiment(experiment_name=experiment_name)
     experiment_id = experiment.experiment_id if experiment else mlflow.create_experiment(experiment_name)
+    print(f"MLflow experiment: {mlflow.get_tracking_uri()}/#/experiments/{experiment_id}")
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    run_id, method = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
-    run_id, method = run_probing(cfg,timestamp,experiment_id,precedent_run_id=run_id,precedent_method=method)
-    run_id, method = run_lora(cfg, timestamp, experiment_id, precedent_run_id=run_id, precedent_method=method)
+    if cfg.get("scratch_training", {}).get("run_execution") == True:
+        run_scratch(cfg, timestamp, experiment_id)
+    else:
+        run_id, method = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
+        run_id, method = run_probing(cfg,timestamp,experiment_id,precedent_run_id=run_id,precedent_method=method)
+        run_id, method = run_lora(cfg, timestamp, experiment_id, precedent_run_id=run_id, precedent_method=method)
 
     
 if __name__ == "__main__":

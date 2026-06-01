@@ -7,11 +7,10 @@ from src.pipeline.test import run_test, save_split_predictions
 from src.pipeline.train import run_train
 
 
-def run_lora(cfg, timestamp, experiment_id, precedent_run_id=None, precedent_method=None):
+def run_scratch(cfg, timestamp, experiment_id, precedent_method=None): #precedent_run_id=None,
     cfg_mod = cfg["model"]
     cfg_glob = cfg["globaux"]
-    cfg_method = cfg["lora_training"]
-    loss_name = cfg_method.get("loss_name")
+    cfg_method = cfg["scratch_training"]
 
     if cfg_method["run_execution"]==True:
         print(f"début d'entrainement par {cfg_method['method_FT']}")
@@ -27,15 +26,19 @@ def run_lora(cfg, timestamp, experiment_id, precedent_run_id=None, precedent_met
             val_loader = get_challenge_val_loader(split="val_samp",batch_size=cfg_glob["BATCH_SIZE"],
                                                 num_workers=NUM_WORKERS,model_name=cfg_mod)
 
-            cfg_method_lora = cfg_method.copy()
-            cfg_method_lora.pop("loader_factory", None)
-            cfg_method_lora.pop("val_loader_factory", None)
-            cfg_method_lora.pop("method_FT", None)
-            cfg_method_lora.pop("val_split", None)
-
-            run_id, _, _, df_test, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id, precedent_method, prefix=None)
+            run_id, _, _, df_test, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id=None, precedent_method=None, prefix=None)
             
-            run_evaluation(timestamp=timestamp, val_loader=val_loader, loss_name=loss_name,method_FT=cfg_method["method_FT"], cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix=None, method_kwargs=cfg_method.get("method_kwargs"),index=None)
+            run_evaluation(
+                    timestamp=timestamp,
+                    val_loader=val_loader,
+                    method_FT=cfg_method["method_FT"],
+                    cfg_glob=cfg_glob,
+                    loss_name=cfg_method["loss_name"],
+                    cfg_mod=cfg_mod,
+                    prefix="scratch",
+                    method_kwargs=cfg_method.get("method_kwargs"),
+                    index=None
+                )
             return_method = cfg_method["method_FT"]
             test_loader = get_challenge_test_loader(df_test, cfg_glob["BATCH_SIZE"], NUM_WORKERS,model_name=cfg_mod)
             run_test(timestamp, test_loader, cfg_method["method_FT"],cfg_mod)
@@ -45,4 +48,5 @@ def run_lora(cfg, timestamp, experiment_id, precedent_run_id=None, precedent_met
 
         return run_id, return_method
     else:
-        return precedent_run_id,precedent_method
+        # return precedent_run_id,precedent_method
+        return None, None

@@ -116,3 +116,7 @@ Check off items as they are resolved.
 - [ ] **Learning-rate warm-up**
   - Add a linear warm-up phase before `CosineAnnealingLR` kicks in (use `torch.optim.lr_scheduler.SequentialLR`)
   - Helps stability in the first few epochs of LoRA fine-tuning
+  
+- [ ] **Early stopping gender aware**
+  - L’early stopping ne tient pas compte de la différence entre les genres. - Je pense que c’est dommage, parce que la loss peut continuer de diminuer sur l’échantillon de validation pour de mauvaises raisons (meilleure détection H/F comme proxy). 
+  - Je pense pas que la différence soit majeure, mais ça peut être utile de revenir dessus plus tard pour améliorer ça.

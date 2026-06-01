@@ -38,7 +38,7 @@ Implemented in [src/metrics.py](src/metrics.py): `error_fn()` and `metric_fn()`.
 ## Code Architecture
 
 ```
-main.py                         # Runs the full 3-stage pipeline sequentially
+main.py                         # Runs the 3-stage pipeline OR scratch training depending on config
 test.py                         # Single-batch smoke test (monkey-patches DataLoader)
 
 src/
@@ -64,6 +64,9 @@ src/
   models/
     models.py                   # OcclusionModel (timm backbone + Sigmoid head)
                                 #   get_model(): factory; applies finetuning method
+                                #   CUSTOM_MODELS dict maps name → class (bypasses timm)
+    scratch_cnn.py              # ConvNet: 4-layer CNN trained from scratch
+                                #   _ConvBlock(Conv2d→BN→ReLU→MaxPool), AdaptiveAvgPool, Linear head
     finetuning.py               # inject_lora_transformer(): replaces qkv/query/key/value
                                 #   Linear layers with LoRALinear
                                 #   inject_linear_mlp_probing(): replaces model head
@@ -82,6 +85,7 @@ src/
     run_domain_adaptation.py    # Stage 1 entry point
     run_probing.py              # Stage 2 entry point
     run_lora.py                 # Stage 3 entry point
+    run_scratch.py              # Scratch entry point (single stage, no checkpoint chaining)
 
 config/
   pipeline_default.yaml         # Global defaults: SEED=42, BATCH_SIZE=32, N_SAMPLE=5000,
@@ -90,16 +94,23 @@ config/
     beit3_base_patch16_224.yaml        # Per-model hyperparameter overrides
     vit_tiny_patch16_224.yaml
     vit_tiny_patch16_224_no_celeba.yaml  # Minimal run — skips CelebA stage
+    cnn_4l.yaml                        # 4-layer ConvNet trained from scratch
 
 scripts/
   run_cluster.sbatch            # SLURM job script for cluster training
+  mean_norm.py                  # One-shot script: computes per-channel mean & std of the
+                                #   training set (averaged over batches); use the output to
+                                #   replace the ImageNet defaults in _get_transform() for
+                                #   scratch CNN models
 ```
 
 ---
 
-## 3-Stage Pipeline
+## Pipelines
 
-The pipeline is designed to progressively adapt a pretrained ViT/BEiT:
+`main.py` selects the pipeline based on the config: if `scratch_training.run_execution: True`, it runs the scratch pipeline; otherwise it runs the 3-stage transformer pipeline.
+
+### 3-Stage Pipeline (pretrained ViT/BEiT)
 
 | Stage | Script | Dataset | What it trains |
 |---|---|---|---|
@@ -109,7 +120,12 @@ The pipeline is designed to progressively adapt a pretrained ViT/BEiT:
 
 Run IDs are chained: each stage passes `precedent_run_id` so the next stage loads the previous checkpoint via MLflow.
 
-Run everything: `python main.py`
+### Scratch Pipeline (CNN from scratch)
+
+Single stage: `run_scratch.py` trains `ConvNet` from random init with all parameters unfrozen. No checkpoint chaining. Triggered by `scratch_training.run_execution: True` in the config.
+
+Run everything: `python main.py`  
+Run scratch CNN: `python main.py --config cnn_4l.yaml`
 
 ---
 
@@ -135,6 +151,17 @@ Run everything: `python main.py`
 ### Add a new training stage
 1. Create `src/pipeline/run_<stage>.py` following the pattern of `run_lora.py`
 2. Call it from `main.py`, passing the `precedent_run_id` from the previous stage
+
+### Add a new scratch CNN architecture
+1. Add a new `nn.Module` class in `src/models/scratch_cnn.py` (or a new file); output shape must be `[B, num_classes]`
+2. Register it in `src/models/__init__.py`: add the import and add `"your_name": YourClass` to `CUSTOM_MODELS`
+3. Create `config/models/your_name.yaml` with `model: "your_name"` and `scratch_training.run_execution: True`
+4. Run with `python main.py --config your_name.yaml`
+
+**Data loading for custom models — two things to watch:**
+- `CUSTOM_MODELS` (from `src.models`) is checked in `_get_transform()` in [src/data/data_loader.py](src/data/data_loader.py) to skip timm's transform resolution, which would crash on unknown model names
+- The scratch transform is minimal: `ToImage() → ToDtype(float32, scale=True) → Normalize(ImageNet stats)` — no resize/crop because challenge images are already 224×224. `ToImage()` is required to convert PIL→tensor before `Normalize` can run
+- Augmentation (random flips, crops etc.) is applied separately by the existing `augmentation_transform` pipeline in the loader — do not add random transforms inside `_get_transform` or they will be doubled
 
 ### Change hyperparameters
 - Global defaults: `config/pipeline_default.yaml`

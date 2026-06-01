@@ -6,12 +6,12 @@
 #SBATCH --mem=64G 
 ##SBATCH --partition 3090
 #SBATCH --partition P100
-#SBATCH --gpus 1
+#SBATCH --gpus 2
 
 #SBATCH --acctg-freq=task=10
 #SBATCH --job-name=test
-#SBATCH --error=logs/%j.err
-#SBATCH --output=logs/%j.log
+#SBATCH --error=logs/%j.out
+#SBATCH --output=logs/%j.out
 
 
 # HELP
@@ -50,12 +50,17 @@ uv sync
 # source ~/.bashrc
 source .venv/bin/activate
 
-python main.py
+echo "args: $*"
+if [ $# -eq 0 ]; then
+  python main.py
+else
+  python main.py --config "$@"
+fi
 
 echo "=== JOB END ==="
 echo "timestamp: $(date -Is)"
 
 
 
-# scancel 834049 -> arrêter je job
+# scancel 834049 -> arrêter le job
 # sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 --state=RUNNING,PENDING -> voir tous les jobs actifs

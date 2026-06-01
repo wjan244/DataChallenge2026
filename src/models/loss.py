@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch
 import torch.nn as nn
 
+  
+    
 class WeightedMSELoss(nn.Module):
     def __init__(self):
         super().__init__()
@@ -19,6 +21,7 @@ class WeightedMSELoss(nn.Module):
         
         return numerator / (denominator + eps)
 
+#TODO check that iw and pi are not inversed
 class WeightedLiteMSELoss(nn.Module):
     
     def __init__(self):

@@ -7,6 +7,7 @@ globaux:
   NUM_CLASSES: 1
   PATIENCE: 3
   BATCH_SIZE: 256
+  COMPILE: False
 
 # CelebA pre-training skipped — start directly from ImageNet weights
 domain_adaptation_training:
@@ -17,7 +18,7 @@ probing_training:
   run_execution: True
   loss_name: "nMSE"
   learning_rate: 1.0e-3
-  num_epoch: 1
+  num_epoch: 2
   augmentation: True
   method_FT: "probing_training"
   loader_factory: "get_challenge_train_loader"

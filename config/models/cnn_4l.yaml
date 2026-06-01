@@ -1,0 +1,30 @@
+model: "convnet"
+
+globaux:
+  BATCH_SIZE: 128
+  PATIENCE: 50
+  VERBOSE: "WARNING"   # set to DEBUG to see step-by-step training logs
+  COMPILE: True
+
+scratch_training:
+  run_execution: True
+  loss_name: "nMSE"
+  learning_rate: 1.0e-5
+  l2_weight_decay: 1.0e-3
+  num_epoch: 50
+  augmentation: True
+  method_FT: "scratch_training"
+  loader_factory: "get_challenge_train_loader"
+  val_loader_factory: "get_challenge_val_loader"
+  val_split: "val_samp"
+  method_kwargs: {}
+  
+domain_adaptation_training:
+  run_execution: False
+
+probing_training:
+  run_execution: False
+
+lora_training:
+  run_execution: False
+

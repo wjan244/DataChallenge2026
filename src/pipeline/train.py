@@ -36,6 +36,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
 
     # charger les paramètres yaml
     learning_rate = cfg_method["learning_rate"]
+    l2_weight_decay = cfg_method.get("l2_weight_decay",0)
     num_epoch = cfg_method["num_epoch"]
     loss_name = cfg_method["loss_name"]
     method_FT = cfg_method["method_FT"]
@@ -59,12 +60,20 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     model = get_model(cfg_mod, num_classes=1, method=method_FT, weights=weights, **cfg_method_kwargs)
     # -> DEVICE
     model = model.to(DEVICE)
+    
+    if cfg_glob.get("COMPILE",False) :
+        print("Compiling model")
+        # compile for faster run but first epoch is slower
+        if DEVICE.type == 'mps':
+            model = torch.compile(model, backend="aot_eager")
+        else:   
+            model = torch.compile(model)
 
     # GD
     base_loss = LOSS_MAPPING[loss_name]()
     loss_fn = UniversalLossWrapper(base_loss)
         # optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=l2_weight_decay)
         # scheduler
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=num_epoch,eta_min=0,last_epoch=-1)
     
@@ -90,7 +99,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
 
     for n in range(num_epoch):
         epoch_start = time.time()
-        print(f"Epoch {n+1}")
+        print(f"Epoch {n+1}/{num_epoch}")
         model.train()
         running_loss = 0
         progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc="Entraînement")
@@ -113,7 +122,11 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
                 iw = batch[4].to(DEVICE).unsqueeze(1).float()
                 pi = batch[5].to(DEVICE).unsqueeze(1).float()
 
+            # with torch.autocast(device_type="mps", dtype=torch.float16):
+            #     y_pred = model(X)
+            #     loss = loss_fn(y_pred, y, iw, pi)
             y_pred = model(X)
+            
             loss = loss_fn(y_pred, y, iw, pi)
 
             running_loss += loss.item()
@@ -167,7 +180,9 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
             best_loss = final_val_loss
             patience_counter = 0
             print(f"modèle sauvegardé à l'époque {n+1} - Val Loss: {final_val_loss:.4f}")
-            torch.save(model.state_dict(), save_path)
+            state_dict = model._orig_mod.state_dict() if hasattr(model, '_orig_mod') else model.state_dict()
+            torch.save(state_dict, save_path)
+            #torch.save(model.state_dict(), save_path)
         else:
             patience_counter += 1
 
@@ -197,7 +212,12 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
 
     # sauvegarde des poids sur MLFlow (si existants)
     if save_path.exists():
-        model.load_state_dict(torch.load(save_path))
+        # handle compiled models
+        if hasattr(model, '_orig_mod'):
+            model._orig_mod.load_state_dict(torch.load(save_path))
+        else:
+            model.load_state_dict(torch.load(save_path))
+    
         mlflow.log_artifact(local_path=str(save_path))
 
     # log the total training time

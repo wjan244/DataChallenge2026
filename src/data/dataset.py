@@ -16,7 +16,7 @@ from typing import Callable, Optional, Union
 class Dataset(torch.utils.data.Dataset):
     
     def __init__(self, df:pd.DataFrame, image_dir:str, training:bool=True, transform:Optional[Callable]=True)->None:
-         
+
          self.training = training
          self.image_dir = image_dir
          self.df = df

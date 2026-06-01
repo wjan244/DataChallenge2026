@@ -15,7 +15,7 @@ from src.models.loss import WeightedLiteMSELoss,UniversalLossWrapper,WeightedMSE
 # Loss mapping
 LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLiteMSE":WeightedLiteMSELoss}
 
-def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None, cfg_mod=None, prefix=None, method_kwargs: dict | None = None, index:str=None)->None:
+def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None, cfg_mod=None, prefix=None, method_kwargs: dict | None = None, index:str=None, save_val_csv: bool = True)->None:
 
     """
     Pipe d'évalualtion:
@@ -172,22 +172,23 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None,
                     
         results_df = pd.DataFrame(results_list)
 
+        if save_val_csv:
+            val_csv_path = SUBMISSION_DIR / f"{timestamp}_submission_{model_tag}" / "val.csv"
+            val_csv_path.parent.mkdir(parents=True, exist_ok=True)
+            results_df[["filename", "FaceOcclusion", "pred", "gender", "iw"]].to_csv(val_csv_path, index=False)
+
         # evaluation
         results_male = results_df.loc[results_df["gender"] == 1.0]
         results_female = results_df.loc[results_df["gender"] == 0.0]
 
-        # prise en compte des poids pi et iw pour l'évaluation: construire des vecteurs w_female et w_male si disponibles
-        if "combined_weights" in results_df.columns and results_df["combined_weights"].notna().any():
-            w_female = results_female["combined_weights"].to_numpy() if not results_female.empty else None
-            w_male = results_male["combined_weights"].to_numpy() if not results_male.empty else None
-            score = metric_fn(results_female, results_male, w=(w_female, w_male))
-        else:
-            score = metric_fn(results_female, results_male, w=None)
-        
+        err_female = error_fn(results_female)
+        err_male = error_fn(results_male)
+        score = metric_fn(results_female, results_male)
+
     suffix = f"_{index}" if index else ""
-    metric_name = f"{prefix}_val_score{suffix}"
-    # loging mlflow
-    mlflow.log_metric(metric_name, score)
+    mlflow.log_metric(f"{prefix}_val_score{suffix}", score)
+    mlflow.log_metric(f"{prefix}_err_female{suffix}", err_female)
+    mlflow.log_metric(f"{prefix}_err_male{suffix}", err_male)
 
     # sauvegarde du score dans le journal (en local)
     log_path = HISTORY_DIR / f"{timestamp}_eval_history_{model_tag}.csv"
