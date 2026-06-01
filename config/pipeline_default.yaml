@@ -5,7 +5,6 @@ globaux:
   NUM_CLASSES : 1
   PATIENCE : 5
   BATCH_SIZE : 32
-  VERBOSE: "WARNING"   # set to DEBUG to see step-by-step training logs
   
 domain_adaptation_training:
   run_execution: False
