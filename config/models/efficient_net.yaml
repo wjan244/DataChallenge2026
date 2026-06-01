@@ -11,9 +11,9 @@ cnn_ft_training:
   run_execution: True
   loss_name: "nMSE"
   learning_rate: 1.0e-3
-  num_epoch_head: 1
-  num_epoch_per_phase: 1
-  n_phases: 3
+  num_epoch_head: 50
+  num_epoch_per_phase: 10
+  n_phases: 7
   lr_decay_factor: 0.1
   augmentation: True
   method_FT: "cnn_ft"

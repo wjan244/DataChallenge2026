@@ -16,6 +16,8 @@ from src.models.models import OcclusionModel
 from src.models.finetuning import inject_linear_mlp_probing
 from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
 from src.data.data_utils import get_challenge_split
+from src.metrics import error_fn, metric_fn
+import pandas as pd
 import timm
 
 LOSS_MAPPING = {"MSE": nn.MSELoss, "BCE": nn.BCELoss, "nMSE": WeightedMSELoss, "nLiteMSE": WeightedLiteMSELoss}
@@ -90,19 +92,35 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
 
             model.eval()
             val_loss = 0.0
+            val_rows = []
             with torch.inference_mode():
                 for batch in val_loader:
                     X_val = batch[0].to(DEVICE)
                     y_val = batch[1].to(DEVICE).float().view(-1, 1)
                     iw_val = batch[4].to(DEVICE).unsqueeze(1).float() if loss_name in ("nMSE", "nLiteMSE") else None
                     pi_val = batch[5].to(DEVICE).unsqueeze(1).float() if loss_name == "nMSE" else None
-                    val_loss += loss_fn(model(X_val), y_val, iw_val, pi_val).item()
+                    y_pred_val = model(X_val)
+                    val_loss += loss_fn(y_pred_val, y_val, iw_val, pi_val).item()
+                    gender = batch[2]
+                    for i in range(len(X_val)):
+                        val_rows.append({
+                            "pred": float(y_pred_val[i].cpu()),
+                            "FaceOcclusion": float(y_val[i].cpu()),
+                            "gender": float(gender[i]),
+                        })
 
             val_loss /= len(val_loader)
+            val_df = pd.DataFrame(val_rows)
+            err_female = error_fn(val_df[val_df["gender"] == 0.0])
+            err_male = error_fn(val_df[val_df["gender"] == 1.0])
+            score = metric_fn(val_df[val_df["gender"] == 0.0], val_df[val_df["gender"] == 1.0])
 
             mlflow.log_metric("lr", optimizer.param_groups[0]["lr"], step=global_step)
             mlflow.log_metric("train_loss", train_loss, step=global_step)
             mlflow.log_metric("val_loss", val_loss, step=global_step)
+            mlflow.log_metric("val_score", score, step=global_step)
+            mlflow.log_metric("val_err_female", err_female, step=global_step)
+            mlflow.log_metric("val_err_male", err_male, step=global_step)
             mlflow.log_metric("epoch_time_s", time.time() - epoch_start, step=global_step)
             global_step += 1
 
@@ -205,7 +223,7 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
         # Phases 1..n_phases: progressive unfreezing
         blocks_per_phase = int(np.ceil(len(model.model.blocks)/n_phases))
         for phase in range(1, n_phases + 1):
-            lr = learning_rate * (lr_decay_factor ** phase)
+            lr = learning_rate * (lr_decay_factor)# ** phase)
             n_unfrozen = phase * blocks_per_phase
             print(f"\n=== Phase {phase}: unfreeze top {n_unfrozen} blocks (lr={lr:.2e}) ===")
             _freeze_all(model)
