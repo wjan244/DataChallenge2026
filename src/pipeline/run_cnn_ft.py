@@ -196,6 +196,11 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
             lr=learning_rate, num_epoch=num_epoch_head,
             phase_idx=0, save_path=save_path, best_loss=best_loss, global_step=global_step
         )
+        run_evaluation(
+            timestamp=timestamp, val_loader=val_loader, loss_name=cfg_method["loss_name"],
+            method_FT=method_FT, cfg_glob=cfg_glob, cfg_mod=cfg_mod,
+            prefix=method_FT, method_kwargs=mkwargs, index="phase_0", save_val_csv=False
+        )
 
         # Phases 1..n_phases: progressive unfreezing
         blocks_per_phase = int(np.ceil(len(model.model.blocks)/n_phases))
@@ -213,6 +218,11 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
                 model, train_loader, val_loader, loss_fn, cfg_glob, cfg_method,
                 lr=lr, num_epoch=num_epoch_per_phase,
                 phase_idx=phase, save_path=save_path, best_loss=best_loss, global_step=global_step
+            )
+            run_evaluation(
+                timestamp=timestamp, val_loader=val_loader, loss_name=cfg_method["loss_name"],
+                method_FT=method_FT, cfg_glob=cfg_glob, cfg_mod=cfg_mod,
+                prefix=method_FT, method_kwargs=mkwargs, index=f"phase_{phase}", save_val_csv=False
             )
 
         # load best checkpoint, log, evaluate, generate submission
