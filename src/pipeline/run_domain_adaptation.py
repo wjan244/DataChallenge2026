@@ -13,6 +13,7 @@ def run_domain_adaptation(cfg, file_name, timestamp, experiment_id, precedent_ru
     cfg_mod = cfg["model"]
     cfg_glob = cfg["globaux"]
     cfg_method = cfg["domain_adaptation_training"]
+    loss_name = cfg_method.get("loss_name")
 
     if cfg_method["run_execution"]==True:
 
@@ -40,8 +41,8 @@ def run_domain_adaptation(cfg, file_name, timestamp, experiment_id, precedent_ru
             return_method = cfg_method["method_FT"]
 
             # évaluer sur CelebA puis sur le dataset Challenge
-            run_evaluation(timestamp=timestamp, val_loader=val_loader, method_FT=return_method, cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix="score sur Celeba", method_kwargs=cfg_method.get("method_kwargs"),index="CeleBa_evaluation")
-            run_evaluation(timestamp=timestamp, val_loader=challenge_val_loader, method_FT=return_method, cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix="score sur Dataset Challenge", method_kwargs=cfg_method.get("method_kwargs"),index="Challenge_evaluation")
+            run_evaluation(timestamp=timestamp, val_loader=val_loader, method_FT=return_method, loss_name=loss_name,cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix="score sur Celeba", method_kwargs=cfg_method.get("method_kwargs"),index="CeleBa_evaluation")
+            run_evaluation(timestamp=timestamp, val_loader=challenge_val_loader, method_FT=return_method, loss_name=loss_name,cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix="score sur Dataset Challenge", method_kwargs=cfg_method.get("method_kwargs"),index="Challenge_evaluation")
 
             print(f"fin d'entrainement par {cfg_method['method_FT']}")
             return run_id, return_method

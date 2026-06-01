@@ -185,7 +185,7 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None,
             score = metric_fn(results_female, results_male, w=None)
         
     suffix = f"_{index}" if index else ""
-    metric_name = f"{prefix}_val_score{suffix}"
+    metric_name = f"score_DataChallenge_{prefix}_val_score{suffix}"
     # loging mlflow
     mlflow.log_metric(metric_name, score)
 
