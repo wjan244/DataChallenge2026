@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
@@ -55,7 +56,7 @@ class ConvNet(torch.nn.Module):
         self.pool = torch.nn.AdaptiveAvgPool2d(1) #14x14 -> 1
         self.drop_fc = torch.nn.Dropout(p=dropout)
         self.fc = torch.nn.Linear(256, num_classes)
-        
+        _init_weights(self)
 
     def forward(self, x):
         # x = x.view(-1,3,224,224)
@@ -71,40 +72,59 @@ class ConvNet(torch.nn.Module):
         return x
     
     
-# class ResBlock(torch.nn.Module):
-# 	def __init__(self,inDim,hiddenDim,outDim,kernel):
-# 		super().__init__()
+class ResBlock(torch.nn.Module):
+    def __init__(self, in_channels, out_channels, kernel, stride=1):
+        super().__init__()
+        self.conv1 = torch.nn.Conv2d(in_channels, out_channels, kernel, padding=1, stride=stride, bias=False, padding_mode='circular')
+        self.bn1 = torch.nn.BatchNorm2d(out_channels)
+        self.conv2 = torch.nn.Conv2d(out_channels, out_channels, kernel, padding=1, stride=stride, bias=False, padding_mode='circular')
+        self.bn2 = torch.nn.BatchNorm2d(out_channels)
 
-# 		self.conv1 = torch.nn.Conv2d(inDim, hiddenDim, kernel,padding='same')
-# 		self.conv2 = torch.nn.Conv2d(hiddenDim, outDim, kernel,padding='same')
-# 		if inDim!=outDim:
-# 			self.shortcut = torch.nn.Conv2d(inDim, outDim, 1,padding='same')
-# 		else:
-# 			self.shortcut = torch.nn.Identity()
+        if in_channels!=out_channels:
+            self.shortcut = torch.nn.Conv2d(in_channels, out_channels, 1,padding='same')
+        else:
+            self.shortcut = torch.nn.Identity()
 
-# 	def forward(self, x):
-# 		y = self.shortcut(x)
-# 		x = F.relu(self.conv1(x))
-# 		x = F.relu(self.conv2(x))
-# 		return x + y
+        def forward(self, x):
+            y = self.shortcut(x)
+            x = F.relu(self.bn1(self.conv1(x)))
+            x = self.bn2(self.conv2(x))
+            return F.relu(x + y)
 
-# # class ResNet(torch.nn.Module):
-# # 	def __init__(self,p=0.5):
-# # 		super().__init__()
-# # 		self.ResBlock1 = ResBlock(inDim=1, hiddenDim=2, outDim=3, kernel=3)
-# # 		self.pool = torch.nn.MaxPool2d(2, 2)
-# # 		self.ResBlock2 = ResBlock(inDim=3, hiddenDim=4, outDim=6, kernel=3)
-# # 		self.ResBlock3 = ResBlock(inDim=6, hiddenDim=9, outDim=12, kernel=3)
-# # 		self.fc = torch.nn.Linear(6*6*12, 2)
+def _make_layer(in_channels, out_channels, num_blocks, stride):
+    layers =[]
+    layers.append(ResBlock(in_channels, out_channels, stride=stride))
+    for _ in range(1, num_blocks):
+        layers.append(ResBlock(out_channels, out_channels, stride=1))
+    
+    return torch.nn.Sequential(*layers)
 
-# # 	def forward(self, x):
-# # 		x = x.view(-1,1,48,48)
-# # 		x = self.pool(self.ResBlock1(x))
-# # 		x = self.pool(self.ResBlock2(x))
-# # 		x = self.pool(self.ResBlock3(x))
-# # 		x = torch.flatten(x, 1) # flatten all dimensions except batch
-# # 		x = self.fc(x)
-# # 		return x
+
+class ResNet18(torch.nn.Module):
+    def __init__(self,p=0.2):
+        super().__init__()
+        self.stem = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=4, stride=2, padding=1,padding_mode='circular')
+        ) # 64x56x56
+        
+        self.layer1 = _make_layer(64, 64, num_blocks=2, stride=1) # 64x56x56
+        self.layer2 = _make_layer(64, 128, num_blocks=2, stride=1) # 64x56x56
+        self.layer3 = _make_layer(128, 256, num_blocks=2, stride=1) # 64x56x56
+        self.layer4 = _make_layer(256, 512, num_blocks=2, stride=1) # 64x56x56
+        
+        self.pool = nn.AdaptiveAvgPool2d((1,1))
+
+    def forward(self, x):
+        x = x.view(-1,1,48,48)
+        x = self.pool(self.ResBlock1(x))
+        x = self.pool(self.ResBlock2(x))
+        x = self.pool(self.ResBlock3(x))
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = self.fc(x)
+        return x
 
 # # class DropNet(torch.nn.Module):
 # # 	def __init__(self,DropOutRate):
