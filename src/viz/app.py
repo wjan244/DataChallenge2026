@@ -97,7 +97,7 @@ def compute_loss(loss_cls, df: pd.DataFrame) -> float | None:
 
 
 # ── App ──────────────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Occlusion Explorer", layout="wide")
+st.set_page_config(page_title="Occlusion Explorer", layout="centered")
 st.title("Face Occlusion Explorer")
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────────
@@ -142,16 +142,21 @@ tab_stats, tab_pic, tab_stars = st.tabs(["Statistics", "Picture", "Stars"])
 with tab_stats:
     st.subheader("Occlusion Distribution")
 
-    # Load all available splits to overlay in the histogram
+    # Histogram — GT and predictions overlaid, all available splits
     split_colors = {"train": "steelblue", "val": "darkorange", "test": "forestgreen"}
-    fig, ax = plt.subplots(figsize=(10, 4))
+    pred_colors  = {"train": "cornflowerblue", "val": "gold", "test": "lightgreen"}
+    fig, ax = plt.subplots(figsize=(7, 3))
     for s, color in split_colors.items():
         s_df = load_split_df(selected_run, s)
         if s_df is None:
             continue
-        col = "FaceOcclusion" if s != "test" else "pred"
-        label = f"{s} (GT)" if s != "test" else "test (pred)"
-        ax.hist(s_df[col].dropna(), bins=60, alpha=0.55, label=label, color=color)
+        if s != "test" and "FaceOcclusion" in s_df.columns:
+            ax.hist(s_df["FaceOcclusion"].dropna(), bins=60, alpha=0.5,
+                    label=f"{s} GT", color=color)
+        if "pred" in s_df.columns:
+            ax.hist(s_df["pred"].dropna(), bins=60, alpha=0.4,
+                    label=f"{s} pred", color=pred_colors[s], linestyle="dashed",
+                    histtype="step", linewidth=1.5)
     ax.axvline(occ_min, color="red", linestyle="--", linewidth=1.2, alpha=0.8)
     ax.axvline(occ_max, color="red", linestyle="--", linewidth=1.2, alpha=0.8,
                label=f"selected interval [{occ_min:.2f}, {occ_max:.2f}]")
@@ -162,6 +167,29 @@ with tab_stats:
     plt.close(fig)
 
     st.caption(f"Filtered rows (current split + filters): **{len(df_filtered)}** / {len(df)}")
+
+    # Scatter plot — GT vs predicted, coloured by gender (train/val only)
+    if has_gt and not df_filtered.empty and "pred" in df_filtered.columns:
+        st.subheader("GT vs Predicted")
+        scatter_df = df_filtered[["FaceOcclusion", "pred", "gender"]].dropna()
+        if not scatter_df.empty:
+            fig2, ax2 = plt.subplots(figsize=(5, 4))
+            gender_palette = {0.0: ("#e07b7b", "Female"), 1.0: ("#5b8dd9", "Male")}
+            for g_val, (color, label) in gender_palette.items():
+                sub = scatter_df[scatter_df["gender"] == g_val]
+                if not sub.empty:
+                    ax2.scatter(sub["FaceOcclusion"], sub["pred"],
+                                alpha=0.35, s=8, color=color, label=label)
+            lims = [
+                min(scatter_df["FaceOcclusion"].min(), scatter_df["pred"].min()),
+                max(scatter_df["FaceOcclusion"].max(), scatter_df["pred"].max()),
+            ]
+            ax2.plot(lims, lims, "k--", linewidth=1, alpha=0.6, label="perfect prediction")
+            ax2.set_xlabel("Ground Truth")
+            ax2.set_ylabel("Predicted")
+            ax2.legend(markerscale=3)
+            st.pyplot(fig2)
+            plt.close(fig2)
 
     if has_gt and not df_filtered.empty:
         st.subheader("Competition Score (filtered interval)")
