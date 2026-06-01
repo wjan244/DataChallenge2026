@@ -22,6 +22,7 @@ from src.pipeline.run_domain_adaptation import run_domain_adaptation
 from src.pipeline.run_probing import run_probing
 from src.pipeline.run_lora import run_lora
 from src.pipeline.run_scratch import run_scratch
+from src.pipeline.run_cnn_ft import run_cnn_ft
 
 
 SEED = load_config(CONFIG_DEFAULT)["globaux"]["SEED"]
@@ -47,6 +48,8 @@ def main(file_name):
 
     if cfg.get("scratch_training", {}).get("run_execution") == True:
         run_scratch(cfg, timestamp, experiment_id)
+    elif cfg.get("cnn_ft_training", {}).get("run_execution") == True:
+        run_cnn_ft(cfg, timestamp, experiment_id)
     else:
         run_id, method = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
         run_id, method = run_probing(cfg,timestamp,experiment_id,precedent_run_id=run_id,precedent_method=method)

@@ -16,6 +16,9 @@ Webp vs jpeg
 with batch 128: jpeg: 04:53 / webp: 4:50
 removed the isntallati
 
+
+
+
 ## Meeting notes
 
 ### 26 MAI

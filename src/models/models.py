@@ -54,6 +54,9 @@ def _setup_scratch(model: nn.Module, **kwargs) -> nn.Module:
         param.requires_grad=True
     return model
 
+def _setup_cnn_ft(model: nn.Module, probing_type:str = None, hidden_size: int = None, **kwargs) -> nn.Module:
+    return inject_linear_mlp_probing(model, probing_type, hidden_size)
+
 def _setup_lora_finetuning(model: nn.Module, rank: int = 8, alpha: int = 16, dropout: float = 0.0, **kwargs) -> nn.Module:
     # injecter les poids LoRA si pas déja prsents (une seule injection)
     if not any("lora_" in name for name, _ in model.named_parameters()):
@@ -71,7 +74,7 @@ def get_model(model_name: str, num_classes=1, method: str | None = None, weights
     - Linear_probing
     - LoRA
     """
-    METHOD_MAPPING = {"scratch_training":_setup_scratch, "domain_adaptation":_setup_domain_adaptation,"probing_training":_setup_probing,"lora_training":_setup_lora_finetuning} 
+    METHOD_MAPPING = {"cnn_ft": _setup_cnn_ft, "scratch_training":_setup_scratch, "domain_adaptation":_setup_domain_adaptation,"probing_training":_setup_probing,"lora_training":_setup_lora_finetuning}
 
     # récupérer le modèle
     
