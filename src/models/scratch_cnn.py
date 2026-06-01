@@ -29,7 +29,7 @@ def _init_weights(self):
 class _ConvBlock(torch.nn.Module):
     def __init__(self,in_channels, out_channels, dropout):
         super().__init__()
-        self.conv = torch.nn.Conv2d(in_channels, out_channels, 3, stride=2, padding=1, padding_mode='circular')
+        self.conv = torch.nn.Conv2d(in_channels, out_channels, 3, stride=2, padding=1, padding_mode='reflect')
         self.bn = torch.nn.BatchNorm2d(out_channels) # cause issues on MPs with compile?
         self.activation = F.relu        
         self.drop = torch.nn.Dropout2d(p=dropout)
@@ -73,15 +73,15 @@ class ConvNet(torch.nn.Module):
     
     
 class ResBlock(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, kernel, stride=1):
+    def __init__(self, in_channels, out_channels, stride=1):
         super().__init__()
-        self.conv1 = torch.nn.Conv2d(in_channels, out_channels, kernel, padding=1, stride=stride, bias=False, padding_mode='circular')
+        self.conv1 = torch.nn.Conv2d(in_channels, out_channels, 3, padding=1, stride=stride, bias=False, padding_mode='reflect')
         self.bn1 = torch.nn.BatchNorm2d(out_channels)
-        self.conv2 = torch.nn.Conv2d(out_channels, out_channels, kernel, padding=1, stride=stride, bias=False, padding_mode='circular')
+        self.conv2 = torch.nn.Conv2d(out_channels, out_channels, 3, padding=1, stride=1, bias=False, padding_mode='reflect')
         self.bn2 = torch.nn.BatchNorm2d(out_channels)
 
         if in_channels!=out_channels:
-            self.shortcut = torch.nn.Conv2d(in_channels, out_channels, 1,padding='same')
+            self.shortcut = torch.nn.Conv2d(in_channels, out_channels, 1, stride=stride, padding='same', padding_mode='reflect')
         else:
             self.shortcut = torch.nn.Identity()
 
@@ -92,8 +92,7 @@ class ResBlock(torch.nn.Module):
         return F.relu(x + y)
 
 def _make_layer(in_channels, out_channels, num_blocks, stride):
-    layers =[]
-    layers.append(ResBlock(in_channels, out_channels, stride=stride))
+    layers =[ResBlock(in_channels, out_channels, stride=stride)]
     for _ in range(1, num_blocks):
         layers.append(ResBlock(out_channels, out_channels, stride=1))
     
@@ -101,7 +100,7 @@ def _make_layer(in_channels, out_channels, num_blocks, stride):
 
 
 class ResNet18(torch.nn.Module):
-    def __init__(self,p=0.2):
+    def __init__(self,p=0.3, num_classes=1):
         super().__init__()
         self.stem = nn.Sequential(
             nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
@@ -111,39 +110,27 @@ class ResNet18(torch.nn.Module):
         ) # 64x56x56
         
         self.layer1 = _make_layer(64, 64, num_blocks=2, stride=1) # 64x56x56
-        self.layer2 = _make_layer(64, 128, num_blocks=2, stride=1) # 64x56x56
-        self.layer3 = _make_layer(128, 256, num_blocks=2, stride=1) # 64x56x56
-        self.layer4 = _make_layer(256, 512, num_blocks=2, stride=1) # 64x56x56
+        self.layer2 = _make_layer(64, 128, num_blocks=2, stride=2) # 128x28x28
+        self.layer3 = _make_layer(128, 256, num_blocks=2, stride=2) # 256x14x14
+        # self.layer4 = _make_layer(256, 512, num_blocks=2, stride=2) # 512x7x7
         
-        self.pool = nn.AdaptiveAvgPool2d((1,1))
+        self.pool = nn.AdaptiveAvgPool2d((1,1)) #256x1x1
 
+        self.head = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(512,256),
+            nn.RelU(),
+            nn.Dropout(p),
+            nn.Linear(256, num_classes) 
+        ) # no sigmoid done in occlusion wrapper
+        _init_weights(self)
+        
     def forward(self, x):
-        x = x.view(-1,1,48,48)
-        x = self.pool(self.ResBlock1(x))
-        x = self.pool(self.ResBlock2(x))
-        x = self.pool(self.ResBlock3(x))
-        x = torch.flatten(x, 1) # flatten all dimensions except batch
-        x = self.fc(x)
+        x = self.stem(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.pool(x)
+        x = self.head(x)
         return x
-
-# # class DropNet(torch.nn.Module):
-# # 	def __init__(self,DropOutRate):
-# # 		super().__init__()
-# # 		self.conv1 = torch.nn.Conv2d(1, 3, 3, padding='same')
-# # 		self.pool = torch.nn.MaxPool2d(2, 2)
-# # 		self.conv2 = torch.nn.Conv2d(3, 6, 3, padding='same')
-# # 		self.conv3 = torch.nn.Conv2d(6, 12, 3, padding='same')
-# # 		self.fc = torch.nn.Linear(6 * 6 * 12, 2)
-# # 		self.drop = torch.nn.Dropout(DropOutRate)
-
-# # 	def forward(self, x):
-# # 		x = x.view(-1, 1, 48, 48)
-# # 		x = self.pool(F.relu(self.conv1(x)))
-# # 		x = self.drop(x)
-# # 		x = self.pool(F.relu(self.conv2(x)))
-# # 		x = self.drop(x)
-# # 		x = self.pool(F.relu(self.conv3(x)))
-# # 		x = self.drop(x)
-# # 		x = torch.flatten(x, 1)  # flatten all dimensions except batch
-# # 		x = self.fc(x)
-# # 		return x

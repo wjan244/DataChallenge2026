@@ -1,4 +1,4 @@
-model: "convnet"
+model: "resnet18"
 
 globaux:
   BATCH_SIZE: 128
@@ -9,7 +9,7 @@ globaux:
 scratch_training:
   run_execution: True
   loss_name: "nMSE"
-  learning_rate: 1.0e-5
+  learning_rate: 1.0e-4
   l2_weight_decay: 1.0e-3
   num_epoch: 50
   augmentation: True
