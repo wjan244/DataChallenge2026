@@ -25,7 +25,7 @@ domain_adaptation_training:
 
 probing_training:
   run_execution: True
-  loss_name: "nMSE"
+  loss_name: "nLiteMSE"
   learning_rate: 1.0e-3
   num_epoch: 12
   augmentation: True
@@ -42,7 +42,7 @@ probing_training:
 
 lora_training:
   run_execution: True
-  loss_name: "nMSE"
+  loss_name: "nLiteMSE"
   learning_rate: 2.0e-4
   num_epoch: 20
   augmentation: True
