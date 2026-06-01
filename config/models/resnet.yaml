@@ -11,7 +11,7 @@ scratch_training:
   loss_name: "nMSE"
   learning_rate: 1.0e-4
   l2_weight_decay: 1.0e-3
-  num_epoch: 5
+  num_epoch: 50
   augmentation: True
   method_FT: "scratch_training"
   loader_factory: "get_challenge_train_loader"

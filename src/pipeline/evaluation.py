@@ -181,17 +181,9 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None,
         results_male = results_df.loc[results_df["gender"] == 1.0]
         results_female = results_df.loc[results_df["gender"] == 0.0]
 
-        # prise en compte des poids pi et iw pour l'évaluation: construire des vecteurs w_female et w_male si disponibles
-        if "combined_weights" in results_df.columns and results_df["combined_weights"].notna().any():
-            w_female = results_female["combined_weights"].to_numpy() if not results_female.empty else None
-            w_male = results_male["combined_weights"].to_numpy() if not results_male.empty else None
-            err_female = error_fn(results_female, w_female)
-            err_male = error_fn(results_male, w_male)
-            score = metric_fn(results_female, results_male, w=(w_female, w_male))
-        else:
-            err_female = error_fn(results_female, None)
-            err_male = error_fn(results_male, None)
-            score = metric_fn(results_female, results_male, w=None)
+        err_female = error_fn(results_female)
+        err_male = error_fn(results_male)
+        score = metric_fn(results_female, results_male)
 
     suffix = f"_{index}" if index else ""
     mlflow.log_metric(f"{prefix}_val_score{suffix}", score)
