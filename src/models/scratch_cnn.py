@@ -85,11 +85,11 @@ class ResBlock(torch.nn.Module):
         else:
             self.shortcut = torch.nn.Identity()
 
-        def forward(self, x):
-            y = self.shortcut(x)
-            x = F.relu(self.bn1(self.conv1(x)))
-            x = self.bn2(self.conv2(x))
-            return F.relu(x + y)
+    def forward(self, x):
+        y = self.shortcut(x)
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = self.bn2(self.conv2(x))
+        return F.relu(x + y)
 
 def _make_layer(in_channels, out_channels, num_blocks, stride):
     layers =[]
