@@ -188,11 +188,14 @@ def weighted_mse(pred, target, iw, pi, w_genre):
 
 def challenge_score(df):
     """Score officiel split genre (plus bas = mieux)."""
+
     def error(sub):
         gt   = sub["gt"].values
         pred = sub["pred"].values
+        iw   = sub["iw"].values
         pi   = 1 / 30 + gt
-        return np.sum(pi * (pred - gt) ** 2) / (np.sum(pi) + 1e-8)
+        w    = iw * pi
+        return np.sum(w * (pred - gt) ** 2) / (np.sum(w) + 1e-8)
 
     females = df[df["gender"] == 0.0]
     males   = df[df["gender"] == 1.0]
@@ -300,7 +303,7 @@ def main():
     missing, unexpected = model.load_state_dict(state_dict, strict=False)
     print("Missing:", missing)
     print("Unexpected:", unexpected)
-    
+
     print("\n--- Chargement des données ---")
     train_loader, val_loader, df_train = get_loaders()
 
