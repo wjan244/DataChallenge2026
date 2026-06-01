@@ -77,7 +77,8 @@ def run_test(timestamp,test_loader,method_FT,cfg_mod, method_kwargs: dict | None
             for i in range(len(X)):
 
                 results_list.append({'filename': filename[i],
-                                    'FaceOcclusion': float(y_pred[i])
+                                    'FaceOcclusion': float(y_pred[i]),
+                                    'gender' : 'x'
                                     })          
     results_df = pd.DataFrame(results_list)
 
