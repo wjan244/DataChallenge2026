@@ -10,6 +10,7 @@ from tqdm import tqdm
 from src.config import*
 
 from src.data.data_utils import get_challenge_split
+from src.metrics import error_fn, metric_fn
 from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
 from src.models.models import get_model
 
@@ -19,7 +20,8 @@ LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLit
 
 def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method,
               precedent_run_id, precedent_method, prefix: str | None = None,
-              pretrained_checkpoint_path: Path | None = None) -> tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
+              pretrained_checkpoint_path: Path | None = None,
+              log_competition_metrics: bool = False) -> tuple[str, pd.DataFrame, pd.DataFrame, pd.DataFrame, Path]:
     """
     Pipe d'entrainement complet du modèle défini dans config.py:
     - extraire les poids du run_train précédent
@@ -153,6 +155,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         # boucle d'évaluation
         model.eval()
         val_loss = 0
+        val_records = [] if log_competition_metrics else None
         with torch.inference_mode():
             for batch in val_loader:
                 X_val = batch[0].to(DEVICE)
@@ -174,12 +177,29 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
                 loss_v = loss_fn(y_pred_val, y_val, iw_val, pi_val)
                 val_loss += loss_v.item()
 
+                if log_competition_metrics:
+                    gender_val = batch[2]
+                    if torch.is_tensor(gender_val):
+                        gender_val = gender_val.cpu().tolist()
+                    preds_cpu = y_pred_val.squeeze(1).cpu().tolist()
+                    gt_cpu = y_val.squeeze(1).cpu().tolist()
+                    for g, p, gt in zip(gender_val, preds_cpu, gt_cpu):
+                        val_records.append({"gender": float(g), "pred": p, "FaceOcclusion": gt})
+
         final_val_loss = val_loss / len(val_loader)
 
         # enregistrement des métriques sur MLflow
         mlflow.log_metric(key="lr", value=scheduler.get_last_lr()[0], step=n)
         mlflow.log_metric(key="train_loss", value=final_loss, step=n)
         mlflow.log_metric(key="val_loss", value=final_val_loss, step=n)
+
+        if log_competition_metrics:
+            val_df = pd.DataFrame(val_records)
+            female_df = val_df[val_df["gender"] == 0.0]
+            male_df = val_df[val_df["gender"] == 1.0]
+            mlflow.log_metric("val_err_female", error_fn(female_df), step=n)
+            mlflow.log_metric("val_err_male", error_fn(male_df), step=n)
+            mlflow.log_metric("val_score", metric_fn(female_df, male_df), step=n)
 
         # log the time to run the epoch
         epoch_time = time.time() - epoch_start

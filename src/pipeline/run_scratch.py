@@ -30,7 +30,7 @@ def run_scratch(cfg, timestamp, experiment_id, precedent_method=None): #preceden
             ckpt_name = cfg_method.get("pretrained_checkpoint")
             ckpt_path = CHECKPOINT_DIR / ckpt_name if ckpt_name else None
 
-            run_id, _, _, df_test, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id=None, precedent_method=None, prefix=None, pretrained_checkpoint_path=ckpt_path)
+            run_id, _, _, df_test, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id=None, precedent_method=None, prefix=None, pretrained_checkpoint_path=ckpt_path, log_competition_metrics=True)
             
             run_evaluation(
                     timestamp=timestamp,

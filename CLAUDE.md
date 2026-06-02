@@ -64,9 +64,12 @@ src/
   models/
     models.py                   # OcclusionModel (timm backbone + Sigmoid head)
                                 #   get_model(): factory; applies finetuning method
-                                #   CUSTOM_MODELS dict maps name → class (bypasses timm)
+                                #   CUSTOM_MODELS dict maps name → class (bypasses timm):
+                                #   "convnet" → ConvNet, "resnet18" → ResNet18, "efficientnet" → EfficientNet
     scratch_cnn.py              # ConvNet: 4-layer CNN trained from scratch
                                 #   _ConvBlock(Conv2d→BN→ReLU→MaxPool), AdaptiveAvgPool, Linear head
+                                # ResNet18: custom 18-layer ResNet (stem + 4 layer groups of ResBlocks)
+                                # EfficientNet: thin wrapper around timm efficientnet_b0 (pretrained=False)
     finetuning.py               # inject_lora_transformer(): replaces qkv/query/key/value
                                 #   Linear layers with LoRALinear
                                 #   inject_linear_mlp_probing(): replaces model head
@@ -128,7 +131,7 @@ Run IDs are chained: each stage passes `precedent_run_id` so the next stage load
 
 ### Scratch Pipeline (CNN from scratch)
 
-Single stage: `run_scratch.py` trains `ConvNet` from random init with all parameters unfrozen. No checkpoint chaining. Triggered by `scratch_training.run_execution: True` in the config.
+Single stage: `run_scratch.py` trains any `CUSTOM_MODELS` entry (e.g. `ConvNet`, `ResNet18`, `EfficientNet`) from random init with all parameters unfrozen. No checkpoint chaining. Triggered by `scratch_training.run_execution: True` in the config. Per-epoch competition metrics (`val_err_female`, `val_err_male`, `val_score`) are logged to MLflow during training by reusing val-loop predictions (no extra forward pass).
 
 ### CNN Finetuning Pipeline (pretrained CNN — e.g. EfficientNet)
 

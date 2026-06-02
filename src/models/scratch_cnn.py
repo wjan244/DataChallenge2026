@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import timm
 
 #todo
 # dropout
@@ -143,3 +144,12 @@ class ResNet18(torch.nn.Module):
         x = self.pool(x)
         x = self.head(x)
         return x
+
+
+class EfficientNet(nn.Module):
+    def __init__(self, num_classes=1):
+        super().__init__()
+        self.model = timm.create_model("efficientnet_b0", pretrained=False, num_classes=num_classes)
+
+    def forward(self, x):
+        return self.model(x)
