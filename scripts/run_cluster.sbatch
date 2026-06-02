@@ -4,8 +4,8 @@
 #SBATCH --cpus-per-task=10 # nber of env = #cpus - 2 (main process + OS)
 #SBATCH --ntasks=1
 #SBATCH --mem=64G 
-##SBATCH --partition 3090
-#SBATCH --partition P100
+#SBATCH --partition 3090
+##SBATCH --partition P100
 #SBATCH --gpus 1
 
 #SBATCH --acctg-freq=task=10
@@ -29,7 +29,7 @@
 # tail -f logs/ 838668.log
 # squeue -j 837419
 # squeue -p 836898
-# cat logs/838663.log
+# cat logs/838673.log
 
 # rsync -vr DataChallenge2026.zip name@xxx:/home/infres/cmergny-25/DataChallenge2026/data
 
@@ -58,4 +58,5 @@ echo "timestamp: $(date -Is)"
 
 
 # scancel 834049 -> arrêter je job
+# squeue -p 3090 -S p --format="%.10i %.10u %.10Q %.20S %.12t"
 # sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 --state=RUNNING,PENDING -> voir tous les jobs actifs
