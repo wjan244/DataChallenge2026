@@ -4,12 +4,10 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import time
-import hashlib
 
 from pathlib import Path
 from tqdm import tqdm
 from src.config import*
-from mlflow.tracking import MlflowClient
 
 from src.data.data_utils import get_challenge_split
 from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
@@ -42,69 +40,17 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     loss_name = cfg_method["loss_name"]
     method_FT = cfg_method["method_FT"]
     patience = cfg_glob["PATIENCE"]
+    num_classes = cfg_glob["NUM_CLASSES"]
+
     model_tag = f"{cfg_mod}_{method_FT}"
     
     # # load dataframes
     _, df_val_raw, df_val_samp, df_test = get_challenge_split()
-    
-    # extraction des poids précédents + vérification par hash
-    def file_sha256(path: str) -> str:
-        h = hashlib.sha256()
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                h.update(chunk)
-        return h.hexdigest()
-
-    weights = None
-    weights_verified = False
-    downloaded_hash = None
-    if precedent_run_id:
-        client = MlflowClient()
-        prev_artifact = None
-        prev_hash = None
-        try:
-            prev_run = client.get_run(precedent_run_id)
-            prev_artifact = prev_run.data.params.get("checkpoint_artifact")
-            prev_hash = prev_run.data.params.get("checkpoint_hash")
-        except Exception as e:
-            print(f"[train] impossible de récupérer les params du run {precedent_run_id}: {e}")
-
-        # Prefer explicit artifact name logged in previous run
-        if prev_artifact:
-            try:
-                print(f"[train] téléchargement artifact explicite {prev_artifact} depuis run {precedent_run_id}")
-                weights = mlflow.artifacts.download_artifacts(run_id=precedent_run_id, artifact_path=prev_artifact)
-                downloaded_hash = file_sha256(weights)
-                weights_verified = (prev_hash is not None and downloaded_hash == prev_hash)
-                print(f"[train] téléchargé: {weights} hash={downloaded_hash} attendu={prev_hash} verified={weights_verified}")
-            except Exception as e:
-                print(f"[train] échec téléchargement artifact {prev_artifact} depuis run {precedent_run_id}: {e}")
-                weights = None
-        else:
-            # fallback: try conventional name
-            try:
-                precedent_tag = f"{cfg_mod}_{precedent_method}"
-                artifact_name = f"{timestamp}_{precedent_tag}.pt"
-                print(f"[train] tentative download fallback {artifact_name} depuis run {precedent_run_id}")
-                weights = mlflow.artifacts.download_artifacts(run_id=precedent_run_id, artifact_path=artifact_name)
-                downloaded_hash = file_sha256(weights)
-                weights_verified = (prev_hash is not None and downloaded_hash == prev_hash)
-                print(f"[train] téléchargé (fallback): {weights} hash={downloaded_hash} attendu={prev_hash} verified={weights_verified}")
-            except Exception as e:
-                print(f"[train] échec téléchargement fallback depuis run {precedent_run_id}: {e}")
-                weights = None
-    else:
-        weights = None
-
-    # log metric indiquant si on a récupéré les poids attendus
-    try:
-        mlflow.log_metric("weights_verified", 1 if weights_verified else 0)
-    except Exception:
-        pass
 
     # instancier le modèle
     cfg_method_kwargs = cfg_method.get("method_kwargs") or {}
-    model = get_model(cfg_mod, num_classes=1, method=method_FT, weights=weights, **cfg_method_kwargs)
+    model = get_model(timestamp,cfg_mod,cfg_method,precedent_run_id,precedent_method, num_classes, 
+                      method_FT, **cfg_method_kwargs)
     
     # -> DEVICE
     model = model.to(DEVICE)
@@ -201,13 +147,23 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         final_val_loss = val_loss / len(val_loader)
 
         # enregistrement des métriques sur MLflow
-        mlflow.log_metric(key="lr", value=scheduler.get_last_lr()[0], step=n)
-        mlflow.log_metric(key="train_loss", value=final_loss, step=n)
-        mlflow.log_metric(key="val_loss", value=final_val_loss, step=n)
+        def _safe_log(key, value, step=None):
+            try:
+                v = float(value)
+                if v != v or v == float('inf') or v == float('-inf'):
+                    print(f"skip mlflow metric {key}: invalid value {value}")
+                    return
+                mlflow.log_metric(key=key, value=v, step=step)
+            except Exception as e:
+                print(f"failed to log metric {key}: {e}")
+
+        _safe_log("lr", scheduler.get_last_lr()[0], step=n)
+        _safe_log("train_loss", final_loss, step=n)
+        _safe_log("val_loss", final_val_loss, step=n)
 
         # log the time to run the epoch
         epoch_time = time.time() - epoch_start
-        mlflow.log_metric("epoch_time_s", epoch_time, step=n)
+        _safe_log("epoch_time_s", epoch_time, step=n)
         # update du scheduler
         scheduler.step()
 
@@ -246,19 +202,12 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
 
     # sauvegarde des poids sur MLFlow (si existants)
     if save_path.exists():
-        model.load_state_dict(torch.load(save_path))
+        # reload on CPU (device-agnostic) before logging
+        model.load_state_dict(torch.load(save_path, map_location='cpu'))
         mlflow.log_artifact(local_path=str(save_path))
-        # compute and log checkpoint hash so next step can verify origin
-        try:
-            saved_hash = file_sha256(str(save_path))
-            mlflow.log_param("checkpoint_artifact", save_path.name)
-            mlflow.log_param("checkpoint_hash", saved_hash)
-            print(f"[train] artifact {save_path.name} loggé (hash={saved_hash}) pour le run {mlflow.active_run().info.run_id}")
-        except Exception as e:
-            print(f"[train] impossible de calculer/logguer le hash du checkpoint: {e}")
 
     # log the total training time
-    mlflow.log_metric("total_train_time_s", time.time() - train_start)
+    _safe_log("total_train_time_s", time.time() - train_start)
 
     # récupérer l'id de run_train (à injeter sur le run_train suivant)
     run_id = mlflow.active_run().info.run_id

@@ -32,11 +32,11 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None,
     SUBMISSION_DIR.mkdir(parents=True,exist_ok=True)
     checkpoint_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
 
-    # instanciation du modèle
-    model = get_model(cfg_mod, num_classes=1, method=method_FT, **(method_kwargs or {}))
+    # instanciation du modèle (passer timestamp + cfg_method=None car seuls method & method_kwargs sont disponibles ici)
+    model = get_model(timestamp, cfg_mod, None, None, None, num_classes=cfg_glob["NUM_CLASSES"], method=method_FT, **(method_kwargs or {}))
     
         # -> DEVICE
-    model.load_state_dict(torch.load(checkpoint_path,map_location=DEVICE))
+    model.load_state_dict(torch.load(checkpoint_path,map_location='cpu'))
     model = model.to(DEVICE)
     model.eval()
 
@@ -48,7 +48,7 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None,
             total = 0
 
             f1_metric = BinaryF1Score(threshold=0.5).to(DEVICE)
-            #f1_scores = []
+            
             for batch in val_loader:
                 # distinguer deux cas pour pouvoir faire l'évaluation de l'adaptation de domaine sur le Dataset du DataChallenge
                 if isinstance(batch, (list, tuple)):
@@ -185,6 +185,7 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None,
             score = metric_fn(results_female, results_male, w=None)
         
     suffix = f"_{index}" if index else ""
+    prefix = f"_{prefix}" if prefix else ""
     metric_name = f"score_DataChallenge_{prefix}_val_score{suffix}"
     # loging mlflow
     mlflow.log_metric(metric_name, score)

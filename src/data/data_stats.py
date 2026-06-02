@@ -58,26 +58,3 @@ def distribution_adaptation_reweight(n_sample, df, test_distribution):
     return df_reweight, test_distribution, df_distribution
 
 
-def compute_gender_weights(df, n_bins=N_BINS, alpha=cfg_glob['ALPHA_SMOOTH']):
-    """
-    Calcule des poids par bin × genre pour équilibrer les distributions H/F.
-    Retourne : bins (frontières), w_f (poids femmes par bin), w_m (poids hommes).
-    """
-    gt     = df["FaceOcclusion"].values
-    gender = df["gender"].values
-
-    bins    = np.linspace(0, 1, n_bins + 1)
-    bin_idx = np.clip(np.digitize(gt, bins, right=False) - 1, 0, n_bins - 1)
-
-    n_f = np.zeros(n_bins)
-    n_m = np.zeros(n_bins)
-    for b in range(n_bins):
-        mask = bin_idx == b
-        n_f[b] = np.sum((gender == 0.0) & mask)
-        n_m[b] = np.sum((gender == 1.0) & mask)
-
-    n_total = n_f + n_m
-    w_f = (n_total + 2 * alpha) / (2 * (n_f + alpha))
-    w_m = (n_total + 2 * alpha) / (2 * (n_m + alpha))
-
-    return bins, w_f, w_m

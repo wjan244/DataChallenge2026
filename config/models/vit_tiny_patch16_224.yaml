@@ -24,7 +24,7 @@ domain_adaptation_training:
     dropout: 0.2
 
 probing_training:
-  run_execution: True
+  run_execution: False
   loss_name: "nMSE"
   learning_rate: 1.0e-3
   num_epoch: 1

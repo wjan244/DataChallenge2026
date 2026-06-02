@@ -93,22 +93,10 @@ class CelebA(torch.utils.data.Dataset):
         self.paths: npt.NDArray[np.str_] = partition[mask, 0]
         self.identities: npt.NDArray[np.int_] = identity[mask, 1].astype(int)
         self.attr_names: npt.NDArray[np.str_] = attributes[0, 1:]
-
-        # Identification robuste de l'index de la colonne 'Male'
-        cleaned_names = np.array([str(n).strip() for n in self.attr_names])
-        matches = np.where(np.char.lower(cleaned_names) == "male")[0]
-        if matches.size == 0:
-            raise ValueError("Could not find 'Male' column in CelebA attributes")
-        male_col_idx = matches[0]
-
-        # convert attributes values to int (expect -1/1) then build boolean mask (male==1)
-        attr_values = attributes[1:, 1:]
-        try:
-            attr_int = attr_values.astype(int)
-        except Exception:
-            attr_int = np.array([[int(str(v).strip()) for v in row] for row in attr_values], dtype=int)
-
-        self.attributes: npt.NDArray[np.bool_] = (attr_int[mask, male_col_idx] == 1)
+        
+        # Identification de l'index de la colonne 'Male' pour extraire la bonne cible binaire
+        male_col_idx = np.where(self.attr_names == "Male")[0][0]
+        self.attributes: npt.NDArray[np.bool_] = attributes[1:, 1:][mask, male_col_idx] == "1"
 
     def __len__(self):
         return len(self.paths)
@@ -122,13 +110,5 @@ class CelebA(torch.utils.data.Dataset):
 
         # Extraction binaire au format float32 attendu par le modèle (0.0 ou 1.0)
         label = 1.0 if self.attributes[index] else 0.0
-        # gender in the same format as ChallengeTrain (1.0 male, 0.0 female)
-        gender = float(label)
-        # filename as relative path (string)
-        filename = str(self.paths[index])
-        # default importance weight and pi (matching Challenge dataset conventions)
-        iw = np.float32(1.0)
-        pi = np.float32(1/30 + label)
-
-        return img, torch.tensor([label], dtype=torch.float32), gender, filename, iw, pi
+        return img, torch.tensor([label], dtype=torch.float32)
 

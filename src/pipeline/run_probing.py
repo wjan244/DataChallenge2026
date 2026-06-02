@@ -37,10 +37,10 @@ def run_probing(cfg,timestamp, experiment_id, precedent_run_id=None, precedent_m
 
             run_id, _, _, df_test, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id, precedent_method, prefix=None)
 
-            run_evaluation(timestamp=timestamp, val_loader=val_loader,loss_name=loss_name, method_FT=method_ft, cfg_glob=cfg_glob, cfg_mod=cfg_mod, prefix=None, method_kwargs=cfg_method.get("method_kwargs"),index=None)
+            run_evaluation(timestamp=timestamp, cfg_glob=cfg_glob, val_loader=val_loader, loss_name=loss_name, method_FT=method_ft, cfg_mod=cfg_mod, prefix=None, method_kwargs=cfg_method_lp.get("method_kwargs"), index=None)
             return_method = method_ft
             test_loader = get_challenge_test_loader(df_test, cfg_glob["BATCH_SIZE"], NUM_WORKERS, model_name=cfg_mod)
-            run_test(timestamp, test_loader, "probing_training", cfg_mod, method_kwargs=cfg_method.get("method_kwargs"))
+            run_test(timestamp, cfg_glob, test_loader, "probing_training", cfg_mod, method_kwargs=cfg_method_lp.get("method_kwargs"))
             save_split_predictions(timestamp, train_loader, "train", method_ft, cfg_mod, cfg_method.get("method_kwargs"))
             save_split_predictions(timestamp, val_loader, "val", method_ft, cfg_mod, cfg_method.get("method_kwargs"))
 

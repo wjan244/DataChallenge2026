@@ -19,7 +19,7 @@ def get_augmentation_pretrained_transforms()->None:
         ])
 
 def get_augmentation_finetuning_transforms()->None:
-    """défini le transform de data_augmentation avec les transformations
+    """définit le transform de data_augmentation avec les transformations
     de base appelées de manière composée et/ou aléatoire:
     - RandomRotation
     - HorizontalFlip
