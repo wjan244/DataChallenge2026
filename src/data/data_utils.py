@@ -47,6 +47,9 @@ def get_challenge_split(screenshot_path=SCREENSHOT_PATH):
     return df_train_reweight, df_val_raw, df_val_reweight, df_test
 
 
+
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
