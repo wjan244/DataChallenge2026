@@ -81,7 +81,6 @@ def get_model(model_name: str, num_classes=1, method: str | None = None, weights
     if weights is not None:
         state = torch.load(weights, map_location=DEVICE)
         model.load_state_dict(state, strict=False)
-        print("chargement des poids de l'étape précédente")
         
     return model
 

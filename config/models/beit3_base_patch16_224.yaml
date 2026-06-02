@@ -8,7 +8,7 @@ globaux:
   BATCH_SIZE : 32
   
 domain_adaptation_training:
-  run_execution: True
+  run_execution: False
   loss_name: "BCE"
   learning_rate: 5.0e-5
   num_epoch: 7
@@ -24,7 +24,7 @@ domain_adaptation_training:
     dropout: 0.2
 
 probing_training:
-  run_execution: True
+  run_execution: False
   loss_name: "nMSE"
   learning_rate: 1.0e-3
   num_epoch: 12

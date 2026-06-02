@@ -32,9 +32,9 @@ def main(file_name):
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    run_id_1, method_1 = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
-    run_id_2, method_2 = run_probing(cfg,timestamp,experiment_id,precedent_run_id=run_id_1,precedent_method=method_1)
-    run_id_3, method_3 = run_lora(cfg, timestamp, experiment_id, precedent_run_id=run_id_2, precedent_method=method_2)
+    run_id, method = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
+    run_id, method = run_probing(cfg,timestamp,experiment_id,precedent_run_id=run_id,precedent_method=method)
+    run_id, method = run_lora(cfg, timestamp, experiment_id, precedent_run_id=run_id, precedent_method=method)
 
     
 if __name__ == "__main__":
