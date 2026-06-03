@@ -68,12 +68,12 @@ def get_celeba_train_loader(batch_size: int, num_workers: int = NUM_WORKERS, mod
                       num_workers=num_workers, pin_memory=_PIN, persistent_workers=_PW)
 
 
-def get_challenge_val_loader(split: str, batch_size: int, num_workers: int = NUM_WORKERS, model_name: str = None) -> DataLoader:
+def get_challenge_val_loader(split: str, batch_size: int, num_workers: int = NUM_WORKERS, model_name: str = None, is_training=False) -> DataLoader:
     
     _, df_val_raw, df_val_samp, _ = get_challenge_split()
     df_val = df_val_samp if split == "val_samp" else df_val_raw
     
-    val_transform = _get_transform(model_name, is_training=True)   # or False
+    val_transform = _get_transform(model_name, is_training=is_training)   # or False
 
     val_set = Dataset(df_val, IMG_DIR, training=True, transform=val_transform)
     return DataLoader(val_set, batch_size=batch_size, shuffle=False,

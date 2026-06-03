@@ -86,7 +86,7 @@ def _build_loaders(cfg_glob, cfg_method, cfg_mod):
     )
     val_loader = val_fn(
         split="val_samp", batch_size=cfg_glob["BATCH_SIZE"],
-        num_workers=NUM_WORKERS, model_name=cfg_mod
+        num_workers=NUM_WORKERS, model_name=cfg_mod, is_training=False
     )
     _, _, _, df_test = get_challenge_split()
     test_loader = get_challenge_test_loader(df_test, cfg_glob["BATCH_SIZE"], NUM_WORKERS, model_name=cfg_mod)
@@ -128,7 +128,7 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
         model.train()
 
         running_loss = 0.0
-        pbar = tqdm(train_loader, desc="Train", leave=False)
+        pbar = tqdm(train_loader, desc="Train", leave=True)
 
         for batch in pbar:
             X = batch[0].to(DEVICE)

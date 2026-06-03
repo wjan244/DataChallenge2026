@@ -40,6 +40,10 @@ def run_scratch(cfg, timestamp, experiment_id):
         model = model.to(DEVICE)
         model = _compile_model(model, cfg_glob)
 
+        if cfg_method.get("checkpoint_path"):
+            print(f"Resuming from checkpoint: {cfg_method['checkpoint_path']}")
+            _load_best_checkpoint(model, cfg_method["checkpoint_path"])
+
         trainable, total_params = _count_trainable_params(model)
         mlflow.log_params({
             **cfg_glob,

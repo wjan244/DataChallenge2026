@@ -17,11 +17,11 @@ from src.data.data_utils import lookup_gender_weights, compute_gender_weights
 class Dataset(torch.utils.data.Dataset):
     
     def __init__(self, df:pd.DataFrame, image_dir:str, training:bool=True, transform:Optional[Callable]=True)->None:
-         self.training = training
+         self.training_or_validation = training
          self.image_dir = image_dir
          self.df = df
          self.transform = transform if transform else transforms.ToTensor()
-         if training and "FaceOcclusion" in df.columns and "gender" in df.columns:
+         if self.training_or_validation and "FaceOcclusion" in df.columns and "gender" in df.columns:
              y_all = torch.tensor(df["FaceOcclusion"].values, dtype=torch.float32)
              g_all = torch.tensor(df["gender"].values, dtype=torch.float32)
              self.W_F, self.W_M = compute_gender_weights(y_all, g_all)
@@ -45,7 +45,7 @@ class Dataset(torch.utils.data.Dataset):
 
         X = self.transform(img)
 
-        if self.training:
+        if self.training_or_validation:
             y = row['FaceOcclusion']
             y = np.float32(y)
             gender = row['gender']
