@@ -5,10 +5,9 @@ from src.config import *
 from src.data.data_utils import get_challenge_split
 from src.data.data_loader import *
 from src.models.models import get_model
-from src.models.loss import UniversalLossWrapper
+from src.models.loss import UniversalLossWrapper, LOSS_MAPPING
 from src.pipeline.evaluation import save_results
 from src.pipeline.run_cnn_ft import _count_trainable_params, _train_phase
-from src.models.loss import LOSS_MAPPING
 
 def run_scratch(cfg, timestamp, experiment_id): #precedent_run_id=None,
     cfg_mod = cfg["model"]
@@ -55,7 +54,7 @@ def run_scratch(cfg, timestamp, experiment_id): #precedent_run_id=None,
                 model = torch.compile(model)
             
 
-        _, total_params = _count_trainable_params(model)
+        trainable, total_params = _count_trainable_params(model)
         mlflow.log_params({
             **cfg_glob,
             **{k: v for k, v in cfg_method.items() if k != "method_kwargs"},
@@ -72,7 +71,6 @@ def run_scratch(cfg, timestamp, experiment_id): #precedent_run_id=None,
         global_step = 0
         best_score = float("inf")
 
-        trainable, _ = _count_trainable_params(model)
         mlflow.log_metric("trainable_params", trainable, step=0)
         
         global_step, best_score, _ = _train_phase(

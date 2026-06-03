@@ -12,7 +12,7 @@ from src.data.data_utils import get_challenge_split
 from src.data.data_loader import *
 from src.models.models import OcclusionModel
 from src.models.finetuning import inject_linear_mlp_probing
-from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, PWGLoss, PWGLossRegularized, UniversalLossWrapper, PWScore, LOSS_MAPPING
+from src.models.loss import UniversalLossWrapper, PWScore, LOSS_MAPPING
 from src.pipeline.evaluation import save_results
 
 import timm
