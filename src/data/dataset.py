@@ -11,16 +11,22 @@ from PIL import Image
 from torchvision import transforms
 from torchvision.transforms.v2 import Transform
 from typing import Callable, Optional, Union
+from src.data.data_utils import lookup_gender_weights, compute_gender_weights
 
 
 class Dataset(torch.utils.data.Dataset):
     
     def __init__(self, df:pd.DataFrame, image_dir:str, training:bool=True, transform:Optional[Callable]=True)->None:
-
          self.training = training
          self.image_dir = image_dir
          self.df = df
          self.transform = transform if transform else transforms.ToTensor()
+         if training and "FaceOcclusion" in df.columns and "gender" in df.columns:
+             y_all = torch.tensor(df["FaceOcclusion"].values, dtype=torch.float32)
+             g_all = torch.tensor(df["gender"].values, dtype=torch.float32)
+             self.W_F, self.W_M = compute_gender_weights(y_all, g_all)
+         else:
+             self.W_F = self.W_M = None
          
     def __len__(self)->int:
         
@@ -45,7 +51,8 @@ class Dataset(torch.utils.data.Dataset):
             gender = row['gender']
             iw = np.float32(row['iw']) if 'iw' in self.df.columns else np.float32(1.0) #poids de pondération
             pi = 1/30 + y # poids du score
-            return X, y, gender, filename, iw, pi
+            gw = lookup_gender_weights(y, gender, self.W_F, self.W_M)
+            return X, y, gender, filename, iw, pi, gw
         else:
             y = None
             gender = None
@@ -59,10 +66,10 @@ class ChallengeTrain(torch.utils.data.Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        X, y, gender, filename, iw, pi = self.dataset[idx]
+        X, y, gender, filename, iw, pi, gw = self.dataset[idx]
         target = torch.tensor([y], dtype=torch.float32) # Shape [1] pour BCE
 
-        return X, target, gender, filename, iw, pi
+        return X, target, gender, filename, iw, pi, gw
 
 
 class CelebA(torch.utils.data.Dataset):

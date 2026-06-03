@@ -3,22 +3,19 @@ import logging
 import numpy as np
 import mlflow
 import torch
-import torch.nn as nn
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
-from src.pipeline.evaluation import run_evaluation
 from src.config import *
+from src.data.data_utils import lookup_gender_weights, get_challenge_split
 from src.data.data_loader import *
-from src.pipeline.test import run_test, save_split_predictions
 from src.models.models import OcclusionModel
 from src.models.finetuning import inject_linear_mlp_probing
-from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
-from src.data.data_utils import get_challenge_split
-import timm
+from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, PWGLoss, PWGLossRegularized, UniversalLossWrapper, PWScore, LOSS_MAPPING
+from src.pipeline.evaluation import save_results
 
-LOSS_MAPPING = {"MSE": nn.MSELoss, "BCE": nn.BCELoss, "nMSE": WeightedMSELoss, "nLiteMSE": WeightedLiteMSELoss}
+import timm
 
 
 def _build_model(model_name, probing_type, hidden_size=512, num_classes=1):
@@ -49,19 +46,19 @@ def _unfreeze_top_n_blocks(model, n):
                 param.requires_grad = True
                 
                 
+                
 def _train_phase(model, train_loader, val_loader, loss_fn,
                  cfg_glob, cfg_method,
-                 lr, num_epoch, phase_idx, save_path, best_loss, global_step):
-    loss_name = cfg_method["loss_name"]
+                 lr, num_epoch, phase_idx, save_path, global_step, best_score=float("inf")):
     patience = cfg_glob["PATIENCE"]
     l2_weight_decay = cfg_method.get("l2_weight_decay", 0)
+    score_fn = PWScore()
 
     optimizer = torch.optim.Adam(
             filter(lambda p: p.requires_grad, model.parameters()), lr=lr, weight_decay=l2_weight_decay)
-    
+
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epoch, eta_min=0)
     patience_counter = 0
-
                     
     for epoch in range(num_epoch):
             epoch_start = time.time()
@@ -74,11 +71,12 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
             for batch in pbar:
                 X = batch[0].to(DEVICE)
                 y = batch[1].to(DEVICE).float().view(-1, 1)
-                iw = batch[4].to(DEVICE).unsqueeze(1).float() if loss_name in ("nMSE", "nLiteMSE") else None
-                pi = batch[5].to(DEVICE).unsqueeze(1).float() if loss_name == "nMSE" else None
-
+                gender = batch[2].to(DEVICE).float().view(-1, 1)
+                iw = batch[4].to(DEVICE).unsqueeze(1).float()
+                pi = batch[5].to(DEVICE).unsqueeze(1).float()
                 y_pred = model(X)
-                loss = loss_fn(y_pred, y, iw, pi)
+                gw = batch[6].to(DEVICE).unsqueeze(1).float()
+                loss = loss_fn(y_pred, y, iw, pi, gw, gender)
                 running_loss += loss.item()
                 pbar.set_postfix(loss=f"{loss.item():.4f}")
 
@@ -90,26 +88,34 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
 
             model.eval()
             val_loss = 0.0
+            val_score = 0.0
             with torch.inference_mode():
                 for batch in val_loader:
                     X_val = batch[0].to(DEVICE)
+                    y_pred_val = model(X_val)
                     y_val = batch[1].to(DEVICE).float().view(-1, 1)
-                    iw_val = batch[4].to(DEVICE).unsqueeze(1).float() if loss_name in ("nMSE", "nLiteMSE") else None
-                    pi_val = batch[5].to(DEVICE).unsqueeze(1).float() if loss_name == "nMSE" else None
-                    val_loss += loss_fn(model(X_val), y_val, iw_val, pi_val).item()
-
+                    gender_val = batch[2].to(DEVICE).float().view(-1, 1)
+                    iw_val = batch[4].to(DEVICE).unsqueeze(1).float()
+                    pi_val = batch[5].to(DEVICE).unsqueeze(1).float()
+                    gw_val = batch[6].to(DEVICE).unsqueeze(1).float()
+                    val_loss += loss_fn(y_pred_val, y_val, iw_val, pi_val, gw_val, gender_val).item()
+                    iter_score, _, _ = score_fn(y_pred_val, y_val, iw_val, pi_val, gender_val)
+                    val_score += iter_score.item()
+                    
             val_loss /= len(val_loader)
+            val_score /= len(val_loader)
 
             mlflow.log_metric("lr", optimizer.param_groups[0]["lr"], step=global_step)
             mlflow.log_metric("train_loss", train_loss, step=global_step)
             mlflow.log_metric("val_loss", val_loss, step=global_step)
+            mlflow.log_metric("val_score", val_score, step=global_step)
             mlflow.log_metric("epoch_time_s", time.time() - epoch_start, step=global_step)
             global_step += 1
 
             scheduler.step()
 
-            if val_loss < best_loss:
-                best_loss = val_loss
+            if val_score < best_score:
+                best_score = val_score
                 patience_counter = 0
                 state_dict = model._orig_mod.state_dict() if hasattr(model, "_orig_mod") else model.state_dict()
                 torch.save(state_dict, save_path)
@@ -121,7 +127,7 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
                 print(f"  → early stop at epoch {epoch+1}")
                 break
 
-    return best_loss, global_step    
+    return global_step, best_score
 
 
 def run_cnn_ft(cfg, timestamp, experiment_id):
@@ -131,6 +137,9 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
 
     if cfg_method["run_execution"] != True:
         return None, None
+
+    if cfg_method["loss_name"] not in ("nMSE", "nLiteMSE", "PGWLoss", "PGWLossRegularized"):
+        raise ValueError(f"Wrong Loss name {cfg_method['loss_name']}. Exiting")
     
     method_FT = cfg_method["method_FT"]
     learning_rate = cfg_method["learning_rate"]
@@ -154,6 +163,8 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
             split="val_samp", batch_size=cfg_glob["BATCH_SIZE"],
             num_workers=NUM_WORKERS, model_name=cfg_mod
         )
+        _, _, _, df_test = get_challenge_split()
+        test_loader = get_challenge_test_loader(df_test, cfg_glob["BATCH_SIZE"], NUM_WORKERS, model_name=cfg_mod)
 
         model = _build_model(cfg_mod, mkwargs.get("probing_type"), mkwargs.get("hidden_size"), cfg_glob["NUM_CLASSES"])
         model = model.to(DEVICE)
@@ -181,8 +192,8 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
         CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
         save_path = CHECKPOINT_DIR / f"{timestamp}_{cfg_mod}_{method_FT}.pt"
         loss_fn = UniversalLossWrapper(LOSS_MAPPING[cfg_method["loss_name"]]())
-        best_loss = float("inf")
         global_step = 0
+        best_score = float("inf")
 
         # Phase 0: head warmup
         _freeze_all(model)
@@ -191,45 +202,39 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
         logger.info(f"Phase 0 — head warmup | trainable: {trainable:,} / {total_params:,} | lr={learning_rate}")
         mlflow.log_metric("trainable_params", trainable, step=0)
         print(f"\n=== Phase 0: head warmup (lr={learning_rate}) ===")
-        best_loss, global_step = _train_phase(
+        global_step, best_score = _train_phase(
             model, train_loader, val_loader, loss_fn, cfg_glob, cfg_method,
             lr=learning_rate, num_epoch=num_epoch_head,
-            phase_idx=0, save_path=save_path, best_loss=best_loss, global_step=global_step
+            phase_idx=0, save_path=save_path, global_step=global_step, best_score=best_score
         )
 
         # Phases 1..n_phases: progressive unfreezing
-        blocks_per_phase = int(np.ceil(len(model.model.blocks)/n_phases))
-        for phase in range(1, n_phases + 1):
-            lr = learning_rate * (lr_decay_factor ** phase)
-            n_unfrozen = phase * blocks_per_phase
-            print(f"\n=== Phase {phase}: unfreeze top {n_unfrozen} blocks (lr={lr:.2e}) ===")
-            _freeze_all(model)
-            _unfreeze_top_n_blocks(model, n_unfrozen)
-            _unfreeze_head(model)
-            trainable, _ = _count_trainable_params(model)
-            logger.info(f"Phase {phase} — unfreeze top {n_unfrozen} blocks | trainable: {trainable:,} / {total_params:,} | lr={lr:.2e}")
-            mlflow.log_metric("trainable_params", trainable, step=phase)
-            best_loss, global_step = _train_phase(
-                model, train_loader, val_loader, loss_fn, cfg_glob, cfg_method,
-                lr=lr, num_epoch=num_epoch_per_phase,
-                phase_idx=phase, save_path=save_path, best_loss=best_loss, global_step=global_step
-            )
+        if n_phases != 0:
+            print(f"Unfreezing progressively the backbone in {n_phases} phases")
+            blocks_per_phase = int(np.ceil(len(model.model.blocks)/n_phases))
+            for phase in range(1, n_phases + 1):
+                lr = learning_rate * (lr_decay_factor ** phase)
+                n_unfrozen = phase * blocks_per_phase
+                print(f"\n=== Phase {phase}: unfreeze top {n_unfrozen} blocks (lr={lr:.2e}) ===")
+                _freeze_all(model)
+                _unfreeze_top_n_blocks(model, n_unfrozen)
+                _unfreeze_head(model)
+                trainable, _ = _count_trainable_params(model)
+                logger.info(f"Phase {phase} — unfreeze top {n_unfrozen} blocks | trainable: {trainable:,} / {total_params:,} | lr={lr:.2e}")
+                mlflow.log_metric("trainable_params", trainable, step=phase)
+                global_step, best_score = _train_phase(
+                    model, train_loader, val_loader, loss_fn, cfg_glob, cfg_method,
+                    lr=lr, num_epoch=num_epoch_per_phase,
+                    phase_idx=phase, save_path=save_path, global_step=global_step, best_score=best_score
+                )
+        else:
+            print(f"{n_phases} = 0: skipping backbone finetuning")
 
         # load best checkpoint, log, evaluate, generate submission
         model.load_state_dict(torch.load(save_path, map_location=DEVICE))
         mlflow.log_artifact(str(save_path))
 
-        _, _, _, df_test = get_challenge_split()
-
-        run_evaluation(
-            timestamp=timestamp, val_loader=val_loader, loss_name=cfg_method["loss_name"],
-            method_FT=method_FT, cfg_glob=cfg_glob, cfg_mod=cfg_mod,
-            prefix=method_FT, method_kwargs=mkwargs, index=None
-        )
-
-        test_loader = get_challenge_test_loader(df_test, cfg_glob["BATCH_SIZE"], NUM_WORKERS, model_name=cfg_mod)
-        run_test(timestamp, test_loader, method_FT, cfg_mod, method_kwargs=mkwargs)
-        save_split_predictions(timestamp, train_loader, "train", method_FT, cfg_mod, mkwargs)
-
-    print(f"fin d'entrainement par {method_FT}")
+        save_results(model, timestamp, train_loader, val_loader, test_loader,
+                     loss_name=cfg_method["loss_name"], cfg_mod=cfg_mod, method_FT=method_FT)
+    print(f"End of training by {method_FT}")
     return run.info.run_id, method_FT

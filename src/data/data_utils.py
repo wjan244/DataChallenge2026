@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import torch
 
 from scipy.stats import entropy
 from sklearn.model_selection import train_test_split
@@ -9,23 +10,21 @@ from src.config_utils import load_config
 from src.data.data_stats import distribution_adaptation_reweight, get_test_distribution_from_screenshot
 
 
-cfg_glob = load_config(CONFIG_DEFAULT).get("globaux", {})
-N_BINS = cfg_glob.get("N_BINS", 20)
-N_SAMPLE = cfg_glob.get("N_SAMPLES")
-
-bins = np.linspace(0, 1, N_BINS + 1)
-bin_center = (bins[:-1] + bins[1:]) / 2
-eps = 1e-6
-
-df_train_raw = pd.read_csv(CSV_DIR / "train.csv", delimiter=',')
-df_test_raw = pd.read_csv(CSV_DIR / "test_students.csv", delimiter=',')
-
+N_BINS_GENDER = 30
+ALPHA_SMOOTH = 50
+N_SAMPLE = load_config(CONFIG_DEFAULT).get("globaux", {}).get("N_SAMPLES")
+BINS = torch.tensor([0.0000, 0.0333, 0.0667, 0.1000, 0.1333, 0.1667, 0.2000, 0.2333, 0.2667,
+        0.3000, 0.3333, 0.3667, 0.4000, 0.4333, 0.4667, 0.5000, 0.5333, 0.5667,
+        0.6000, 0.6333, 0.6667, 0.7000, 0.7333, 0.7667, 0.8000, 0.8333, 0.8667,
+        0.9000, 0.9333, 0.9667, 1.0000], dtype=torch.float64)
 
 def get_challenge_split(screenshot_path=SCREENSHOT_PATH):
     """
-    Pipeline principal : Nettoie les données, effectue le split train/validation 
+    Pipeline principal : Nettoie les données, effectue le split train/validation
     et adapte les distributions via la méthode de tracé par capture d'écran.
     """
+    df_train_raw = pd.read_csv(CSV_DIR / "train.csv", delimiter=',')
+    df_test_raw  = pd.read_csv(CSV_DIR / "test_students.csv", delimiter=',')
     df_train_clean = df_train_raw.dropna()
     df_test = df_test_raw.dropna().reset_index(drop=True)
 
@@ -49,6 +48,12 @@ def get_challenge_split(screenshot_path=SCREENSHOT_PATH):
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
+
+    N_BINS = load_config(CONFIG_DEFAULT).get("globaux", {}).get("N_BINS", 20)
+    bins = np.linspace(0, 1, N_BINS + 1)
+    bin_center = (bins[:-1] + bins[1:]) / 2
+    eps = 1e-6
+    df_train_raw = pd.read_csv(CSV_DIR / "train.csv", delimiter=',')
 
     # Génération du split de données adapté via l'image
     df_train_sub, df_val_raw, df_val_samp, df_test = get_challenge_split(screenshot_path=SCREENSHOT_PATH)
@@ -110,3 +115,42 @@ if __name__ == "__main__":
     ax.set_title("Impact de la repondération sur le domaine cible")
     ax.legend()
     plt.show()
+
+
+
+
+
+
+
+def compute_gender_weights(y_all, gender_all):
+    """Compute per-bin × gender balancing weights from the full training set.
+
+    y_all, gender_all: 1-D float32 tensors over the full training set.
+    Returns w_f, w_m: 1-D float32 tensors of length N_BINS_GENDER.
+    """
+    device = y_all.device
+    bins = BINS.float().to(device)
+    bin_idx = (torch.bucketize(y_all.float(), bins, right=False) - 1).clamp(0, N_BINS_GENDER - 1)
+
+    female = (gender_all == 0.0).float()
+    male   = (gender_all == 1.0).float()
+    n_f = torch.zeros(N_BINS_GENDER, device=device).scatter_add(0, bin_idx, female)
+    n_m = torch.zeros(N_BINS_GENDER, device=device).scatter_add(0, bin_idx, male)
+
+    n_total = n_f + n_m
+    w_f = (n_total + 2 * ALPHA_SMOOTH) / (2 * (n_f + ALPHA_SMOOTH))
+    w_m = (n_total + 2 * ALPHA_SMOOTH) / (2 * (n_m + ALPHA_SMOOTH))
+    return w_f, w_m
+
+
+def lookup_gender_weights(y, gender, w_f, w_m) -> np.float32:
+    """Look up precomputed gender bin weight for a single sample.
+
+    y, gender: scalar (float, np.float32, etc.).
+    w_f, w_m: 1-D float32 tensors of length N_BINS_GENDER (from Dataset.W_F/W_M).
+    Returns: np.float32 — compatible with iw/pi in Dataset.__getitem__.
+    """
+    y_t = torch.tensor([float(y)], dtype=torch.float32)
+    bin_idx = (torch.bucketize(y_t, BINS.float(), right=False) - 1).clamp(0, N_BINS_GENDER - 1)
+    w = w_f[bin_idx] if float(gender) == 0.0 else w_m[bin_idx]
+    return np.float32(w.item())

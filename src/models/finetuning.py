@@ -13,7 +13,9 @@ def inject_linear_mlp_probing(model:torch.nn.Module,probing_type:str,hidden_size
         head_attr = 'head'
     elif hasattr(container, 'classifier'):
         head_attr = 'classifier'
-    
+    else:
+        raise ValueError(f"Cannot find 'head' or 'classifier' on {type(container).__name__}")
+
     head = getattr(container, head_attr)
     in_features = getattr(head, 'in_features', None)
     out_features = getattr(head, 'out_features', None)

@@ -11,11 +11,8 @@ from src.config import*
 
 from src.data.data_utils import get_challenge_split
 from src.metrics import error_fn, metric_fn
-from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
+from src.models.loss import UniversalLossWrapper, LOSS_MAPPING
 from src.models.models import get_model
-
-# Loss mapping
-LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLiteMSE":WeightedLiteMSELoss}
 
 
 def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method,
