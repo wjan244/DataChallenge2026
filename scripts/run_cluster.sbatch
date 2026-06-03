@@ -58,6 +58,6 @@ echo "timestamp: $(date -Is)"
 
 
 # scancel 834049 -> arrêter je job
-# squeue -p 3090 -S p --format="%.10i %.10u %.10Q %.20S %.12t"
+# squeue -p P100 -S p --format="%.10i %.10u %.10Q %.20S %.12t"
 # sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 --state=RUNNING,PENDING -> voir tous les jobs actifs
 # sacct -u wjan-25 --format="JobID,JobName,NodeList,Elapsed,State"

@@ -6,6 +6,8 @@ globaux:
   PATIENCE : 5
   BATCH_SIZE : 32
   ALPHA_SMOOTH : 50
+  N_BINS_GENDER : 30
+  ALPHA_SMOOTH : 50
   
 domain_adaptation_training:
   run_execution: False

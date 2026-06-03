@@ -8,10 +8,14 @@ from src.config_utils import load_config
 
 cfg_glob = load_config(CONFIG_DEFAULT).get("globaux", {})
 N_BINS = cfg_glob.get("N_BINS", 20)
+N_BINS_GENDER = cfg_glob.get("N_BINS_GENDER", 30)
+ALPHA_SMOOTH = cfg_glob.get("ALPHA_SMOOTH", 50)
 
 bins = np.linspace(0, 1, N_BINS + 1)
 bin_center = (bins[:-1] + bins[1:]) / 2
 eps = 1e-6
+
+BINS = torch.linspace(0, 1, steps=31, dtype=torch.float64)
 
 def get_test_distribution_from_screenshot(screenshot_path, n_bins=N_BINS):
     """
@@ -58,3 +62,35 @@ def distribution_adaptation_reweight(n_sample, df, test_distribution):
     return df_reweight, test_distribution, df_distribution
 
 
+def compute_gender_weights(y_all, gender_all):
+    """Compute per-bin × gender balancing weights from the full training set.
+
+    y_all, gender_all: 1-D float32 tensors over the full training set.
+    Returns w_f, w_m: 1-D float32 tensors of length N_BINS_GENDER.
+    """
+    device = y_all.device
+    bins = BINS.float().to(device)
+    bin_idx = (torch.bucketize(y_all.float(), bins, right=False) - 1).clamp(0, N_BINS_GENDER - 1)
+
+    female = (gender_all == 0.0).float()
+    male   = (gender_all == 1.0).float()
+    n_f = torch.zeros(N_BINS_GENDER, device=device).scatter_add(0, bin_idx, female)
+    n_m = torch.zeros(N_BINS_GENDER, device=device).scatter_add(0, bin_idx, male)
+
+    n_total = n_f + n_m
+    w_f = (n_total + 2 * ALPHA_SMOOTH) / (2 * (n_f + ALPHA_SMOOTH))
+    w_m = (n_total + 2 * ALPHA_SMOOTH) / (2 * (n_m + ALPHA_SMOOTH))
+    return w_f, w_m
+
+
+def lookup_gender_weights(y, gender, w_f, w_m) -> np.float32:
+    """Look up precomputed gender bin weight for a single sample.
+
+    y, gender: scalar (float, np.float32, etc.).
+    w_f, w_m: 1-D float32 tensors of length N_BINS_GENDER (from Dataset.W_F/W_M).
+    Returns: np.float32 — compatible with iw/pi in Dataset.__getitem__.
+    """
+    y_t = torch.tensor([float(y)], dtype=torch.float32)
+    bin_idx = (torch.bucketize(y_t, BINS.float(), right=False) - 1).clamp(0, N_BINS_GENDER - 1)
+    w = w_f[bin_idx] if float(gender) == 0.0 else w_m[bin_idx]
+    return np.float32(w.item())

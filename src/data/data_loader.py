@@ -21,15 +21,13 @@ def get_challenge_train_loader(batch_size: int, num_workers: int = NUM_WORKERS, 
 
     # transforms
     data_transform = timm.data.create_transform(**data_config, is_training=True)
-    augmentation_transform = get_augmentation_pretrained_transforms() if augmentation else None
+    augmentation_transform = get_augmentation_finetuning_transforms() if augmentation else None
     transforms = [data_transform, augmentation_transform] if augmentation_transform else [data_transform]
     transform_pipeline = v2.Compose(transforms)
 
     raw_dataset = Dataset(df=df_train, image_dir=IMG_DIR, training=True, transform=transform_pipeline)
     standard_dataset = ChallengeTrain(raw_dataset)
-    # augmentation
-    augmentation_transform = get_augmentation_finetuning_transforms() if augmentation==True else None
-
+    
     return DataLoader(standard_dataset, batch_size=batch_size, shuffle=True,
                       num_workers=num_workers, pin_memory=_PIN, persistent_workers=_PW)
         
