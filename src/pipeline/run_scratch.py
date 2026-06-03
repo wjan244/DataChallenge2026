@@ -40,9 +40,10 @@ def run_scratch(cfg, timestamp, experiment_id):
         model = model.to(DEVICE)
         model = _compile_model(model, cfg_glob)
 
-        if cfg_method.get("checkpoint_path"):
-            print(f"Resuming from checkpoint: {cfg_method['checkpoint_path']}")
-            _load_best_checkpoint(model, cfg_method["checkpoint_path"])
+        if cfg_method.get("pretrained_checkpoint"):
+            ckpt = CHECKPOINT_DIR / cfg_method["pretrained_checkpoint"]
+            print(f"Resuming from checkpoint: {ckpt}")
+            _load_best_checkpoint(model, ckpt)
 
         trainable, total_params = _count_trainable_params(model)
         mlflow.log_params({
@@ -53,6 +54,7 @@ def run_scratch(cfg, timestamp, experiment_id):
             "model_tag": f"{cfg_mod}_{method_FT}",
             "timestamp": timestamp,
             "total_params": total_params,
+            "loss_alpha": cfg_method.get("loss_alpha", 1.0),
         })
 
         CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)

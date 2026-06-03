@@ -23,7 +23,6 @@ def get_augmentation_pretrained_transforms()->None:
         v2.RandomApply([v2.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2)], p=0.5),
         v2.RandomGrayscale(p=0.05),
         v2.RandomApply([v2.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0))], p=0.3),
-        v2.RandomErasing(p=0.3),
     ])
 
 def get_augmentation_finetuning_transforms()->None:

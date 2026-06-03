@@ -14,7 +14,7 @@ from src.data.data_loader import *
 from src.models.models import OcclusionModel
 from src.models.finetuning import inject_linear_mlp_probing
 from src.models.loss import UniversalLossWrapper, PWScore, LOSS_MAPPING
-from src.pipeline.evaluation import save_results
+from src.pipeline.evaluation import save_results, run_evaluation
 
 import timm
 
@@ -119,7 +119,7 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
         for group in optimizer.param_groups:
             group["lr"] = lr
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epoch, eta_min=0)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epoch, eta_min=1e-8)
     patience_counter = 0
 
     for epoch in range(num_epoch):
@@ -161,17 +161,24 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
                 pi_val = batch[5].float().unsqueeze(1).to(DEVICE)
                 gw_val = batch[6].float().unsqueeze(1).to(DEVICE)
                 val_loss += loss_fn(y_pred_val, y_val, iw_val, pi_val, gw_val, gender_val).item()
-                all_preds.append(y_pred_val)
-                all_targets.append(y_val)
-                all_iw.append(iw_val)
-                all_pi.append(pi_val)
-                all_genders.append(gender_val)
+                all_preds.append(y_pred_val.cpu())
+                all_targets.append(y_val.cpu())
+                all_iw.append(iw_val.cpu())
+                all_pi.append(pi_val.cpu())
+                all_genders.append(gender_val.cpu())
 
+        torch.cuda.empty_cache()
         val_loss /= len(val_loader)
+        cpu_preds = torch.cat(all_preds).to(DEVICE)
+        cpu_targets = torch.cat(all_targets).to(DEVICE)
+        cpu_iw = torch.cat(all_iw).to(DEVICE)
+        cpu_pi = torch.cat(all_pi).to(DEVICE)
+        cpu_genders = torch.cat(all_genders).to(DEVICE)
         val_score, val_err_f, val_err_m = score_fn(
-            torch.cat(all_preds), torch.cat(all_targets),
-            torch.cat(all_iw), torch.cat(all_pi), torch.cat(all_genders)
+            cpu_preds, cpu_targets, cpu_iw, cpu_pi, cpu_genders
         )
+        del cpu_preds, cpu_targets, cpu_iw, cpu_pi, cpu_genders
+        torch.cuda.empty_cache()
         val_score = val_score.item()
         val_err_f = val_err_f.item()
         val_err_m = val_err_m.item()
@@ -247,6 +254,7 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
             "model_tag": f"{cfg_mod}_{method_FT}",
             "timestamp": timestamp,
             "total_params": total_params,
+            "loss_alpha": cfg_method.get("loss_alpha", 1.0),
         })
 
         CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)

@@ -95,7 +95,7 @@ def get_celeba_val_loader(batch_size: int, num_workers: int = NUM_WORKERS, model
 
 def get_challenge_test_loader(df_test: pd.DataFrame, batch_size: int, num_workers: int = NUM_WORKERS, model_name: str = None) -> DataLoader:
 
-    test_transform = _get_transform(model_name, is_training=True)   # or False
+    test_transform = _get_transform(model_name, is_training=False)  
 
     test_set = Dataset(df_test, IMG_DIR, training=False, transform=test_transform)
     

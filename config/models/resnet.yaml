@@ -1,18 +1,19 @@
 model: "resnet18"
 
 globaux:
-  BATCH_SIZE: 128
-  PATIENCE: 50
+  BATCH_SIZE: 1024
+  PATIENCE: 15
   VERBOSE: "WARNING"   # set to DEBUG to see step-by-step training logs
   COMPILE: True
 
 scratch_training:
   run_execution: True
   loss_name: "PWGLossRegularized"
-  learning_rate: 1.0e-3
+  pretrained_checkpoint: "2026-06-03_17-33-44_resnet18_scratch_training.pt"
+  learning_rate: 1.0e-4
   l2_weight_decay: 1.0e-3
   num_epoch: 100
-  loss_alpha: 0.0
+  loss_alpha: 1.0
   augmentation: True
   method_FT: "scratch_training"
   loader_factory: "get_challenge_train_loader"

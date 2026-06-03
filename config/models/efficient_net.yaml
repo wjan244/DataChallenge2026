@@ -1,19 +1,19 @@
 model: 'tf_efficientnetv2_s.in21k'
 
 globaux:
-  SEED: 42
   NUM_CLASSES: 1
-  PATIENCE: 11
-  BATCH_SIZE: 32
+  PATIENCE: 60
+  BATCH_SIZE: 128
   VERBOSE: "WARNING"
 
 cnn_ft_training:
   run_execution: True
-  loss_name: "nMSE"
+  loss_name: "PWGLossRegularized"
   learning_rate: 1.0e-3
-  num_epoch_head: 50
-  num_epoch_per_phase: 10
-  n_phases: 7
+  l2_weight_decay: 1.0e-2
+  num_epoch_head: 200
+  num_epoch_per_phase: 0
+  n_phases: 0
   lr_decay_factor: 0.1
   augmentation: True
   method_FT: "cnn_ft"
