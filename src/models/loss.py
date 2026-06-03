@@ -43,8 +43,9 @@ class PWGLoss(nn.Module):
     
     
 class PWGLossRegularized(nn.Module):
-    def __init__(self):
+    def __init__(self, alpha=1.0):
         super().__init__()
+        self.alpha = alpha
 
     def forward(self, y_pred, y_true, iw, pi, gw, gender):
         w  = (iw * pi * gw).view(-1)
@@ -54,7 +55,7 @@ class PWGLossRegularized(nn.Module):
         mask_m = g == 1.0
         err_f = torch.sum(w[mask_f] * se[mask_f]) / (torch.sum(w[mask_f]) + EPS)
         err_m = torch.sum(w[mask_m] * se[mask_m]) / (torch.sum(w[mask_m]) + EPS)
-        return (err_f + err_m) / 2 + torch.sqrt(torch.square(err_f - err_m) + EPS)
+        return (err_f + err_m) / 2 + self.alpha * torch.sqrt(torch.square(err_f - err_m) + EPS)
 
 
     

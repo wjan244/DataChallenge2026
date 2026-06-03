@@ -1,7 +1,7 @@
 model: "convnet"
 
 globaux:
-  BATCH_SIZE: 256
+  BATCH_SIZE: 512
   PATIENCE: 50
   VERBOSE: "WARNING"   # set to DEBUG to see step-by-step training logs
   COMPILE: True
@@ -12,6 +12,7 @@ scratch_training:
   learning_rate: 1.0e-3
   l2_weight_decay: 1.0e-3
   num_epoch: 1
+  loss_alpha: 1.0
   augmentation: True
   method_FT: "scratch_training"
   loader_factory: "get_challenge_train_loader"

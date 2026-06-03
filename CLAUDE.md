@@ -75,7 +75,9 @@ src/
                                 #   inject_linear_mlp_probing(): replaces model head
     lora.py                     # LoRALinear: frozen base + trainable low-rank A·B
     loss.py                     # WeightedMSELoss (nMSE), WeightedLiteMSELoss (nLiteMSE),
-                                #   UniversalLossWrapper — routes by loss_name string
+                                #   PWGLoss (PGWLoss), PWGLossRegularized — gender-weighted losses
+                                #   PWScore — competition metric as nn.Module (used for val early stopping)
+                                #   UniversalLossWrapper — routes by loss_name string via LOSS_MAPPING
 
   pipeline/
     train.py                    # run_train(): Adam + CosineAnnealingLR, early stopping,
@@ -91,6 +93,10 @@ src/
     run_scratch.py              # Scratch entry point (single stage, no checkpoint chaining)
     run_cnn_ft.py               # CNN finetuning entry point: head warmup → progressive block
                                 #   unfreezing; all phases in a single MLflow run
+                                #   _train_phase(): shared train loop used by run_scratch too;
+                                #     optimizer threaded across phases (Adam momentum preserved);
+                                #     val_score computed globally over full val set via PWScore;
+                                #     logs val_err_female + val_err_male per epoch
 
 config/
   pipeline_default.yaml         # Global defaults: SEED=42, BATCH_SIZE=32, N_SAMPLE=5000,
@@ -142,7 +148,11 @@ Single MLflow run, multiple internal phases in `run_cnn_ft.py`. Triggered by `cn
 | 0 — Head warmup | Backbone fully frozen, only MLP head trains at `learning_rate` |
 | 1..n_phases | Progressively unfreeze top blocks (`ceil(total_blocks / n_phases)` per phase), LR = `learning_rate × lr_decay_factor^phase` |
 
-Key config keys (under `cnn_ft_training`): `learning_rate`, `num_epoch_head`, `num_epoch_per_phase`, `n_phases`, `lr_decay_factor`. Block count per phase is computed automatically from the model. Requires `method_kwargs.probing_type` and `method_kwargs.hidden_size` for the MLP head.
+Key config keys (under `cnn_ft_training`): `learning_rate`, `num_epoch_head`, `num_epoch_per_phase`, `n_phases`, `lr_decay_factor`. Block count per phase is computed automatically from the model. Requires `method_kwargs.probing_type` and `method_kwargs.hidden_size` for the MLP head. Optional `loss_alpha` scales the gender-disparity term in `PWGLossRegularized` (default 1.0 if omitted); applies to `scratch_training` the same way.
+
+**Optimizer continuity:** the Adam optimizer is threaded across all phases. Newly unfrozen blocks are appended as a new param group via `add_param_group`; all existing groups have their LR lowered to the current phase LR. Adam's `m`/`v` moment estimates are preserved for the head and any blocks already training.
+
+**Validation scoring:** `val_score` (used for early stopping and checkpointing) is computed by accumulating all val-set predictions into a single tensor and calling `PWScore` once — not averaged per batch. `val_err_female` and `val_err_male` are also logged each epoch at no extra cost.
 
 Run everything: `python main.py`  
 Run scratch CNN: `python main.py --config cnn_4l.yaml`  

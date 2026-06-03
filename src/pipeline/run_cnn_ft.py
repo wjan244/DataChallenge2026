@@ -215,7 +215,12 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
 
         CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
         save_path = CHECKPOINT_DIR / f"{timestamp}_{cfg_mod}_{method_FT}.pt"
-        loss_fn = UniversalLossWrapper(LOSS_MAPPING[cfg_method["loss_name"]]())
+        
+        loss_cls = LOSS_MAPPING[cfg_method["loss_name"]]
+        loss_kwargs = {"alpha": cfg_method["loss_alpha"]} if "loss_alpha" in cfg_method else {}
+        loss_fn = UniversalLossWrapper(loss_cls(**loss_kwargs))
+        #loss_fn = UniversalLossWrapper(LOSS_MAPPING[cfg_method["loss_name"]]())
+      
         global_step = 0
         best_score = float("inf")
 
