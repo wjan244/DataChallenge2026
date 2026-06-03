@@ -147,23 +147,13 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         final_val_loss = val_loss / len(val_loader)
 
         # enregistrement des métriques sur MLflow
-        def _safe_log(key, value, step=None):
-            try:
-                v = float(value)
-                if v != v or v == float('inf') or v == float('-inf'):
-                    print(f"skip mlflow metric {key}: invalid value {value}")
-                    return
-                mlflow.log_metric(key=key, value=v, step=step)
-            except Exception as e:
-                print(f"failed to log metric {key}: {e}")
-
-        _safe_log("lr", scheduler.get_last_lr()[0], step=n)
-        _safe_log("train_loss", final_loss, step=n)
-        _safe_log("val_loss", final_val_loss, step=n)
+        mlflow.log_metric(key="lr", value=scheduler.get_last_lr()[0], step=n)
+        mlflow.log_metric(key="train_loss", value=final_loss, step=n)
+        mlflow.log_metric(key="val_loss", value=final_val_loss, step=n)
 
         # log the time to run the epoch
         epoch_time = time.time() - epoch_start
-        _safe_log("epoch_time_s", epoch_time, step=n)
+        mlflow.log_metric("epoch_time_s", epoch_time, step=n)
         # update du scheduler
         scheduler.step()
 
@@ -207,7 +197,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         mlflow.log_artifact(local_path=str(save_path))
 
     # log the total training time
-    _safe_log("total_train_time_s", time.time() - train_start)
+    mlflow.log_metric("total_train_time_s", time.time() - train_start)
 
     # récupérer l'id de run_train (à injeter sur le run_train suivant)
     run_id = mlflow.active_run().info.run_id

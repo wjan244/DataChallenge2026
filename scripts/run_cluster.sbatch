@@ -26,7 +26,7 @@
 
 #== Run jobs ==
 # sbatch scripts/run_cluster.sbatch # copy the job number
-# tail -f logs/ 838668.log
+# tail -f logs/ 839760.log
 # squeue -j 837419
 # squeue -p 836898
 # cat logs/838673.log
