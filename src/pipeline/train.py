@@ -1,3 +1,4 @@
+import inspect
 import logging
 import mlflow
 import pandas as pd
@@ -10,8 +11,9 @@ from tqdm import tqdm
 from src.config import*
 
 from src.data.data_utils import get_challenge_split
-from src.models.loss import LOSS_MAPPING, UniversalLossWrapper
+from src.models.loss import LOSS_MAPPING, UniversalLossWrapper, build_loss_fn
 from src.models.models import get_model
+from src.metrics import PWScore
 
 
 
@@ -39,6 +41,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     method_FT = cfg_method["method_FT"]
     patience = cfg_glob["PATIENCE"]
     num_classes = cfg_glob["NUM_CLASSES"]
+    loss_name = cfg_method["loss_name"]
 
     model_tag = f"{cfg_mod}_{method_FT}"
     
@@ -54,8 +57,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     model = model.to(DEVICE)
 
     # GD
-    base_loss = LOSS_MAPPING[loss_name]()
-    loss_fn = UniversalLossWrapper(base_loss)
+    loss_fn = build_loss_fn(loss_name)
         # optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         # scheduler
@@ -71,13 +73,17 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     })
     mlflow.log_params(hyper_params)
     
+    # métrique
+    score_fn = PWScore()
     # entrainement
     save_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
     best_loss = float('inf')
 
     # initialisation early stopping
-    best_loss = float('inf')
     patience_counter = 0
+    # initialize tracking variables
+    global_step = 0
+    best_score = float('inf')
     
     train_start = time.time()
 
@@ -86,37 +92,41 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         print(f"Epoch {n+1}")
         model.train()
         running_loss = 0
-        progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc="Entraînement")
+        progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc="Entraînement",leave=True)
 
         for batch_idx, batch in progress_bar:
-            X = batch[0].to(DEVICE)
-            # normalize y to shape [B,1]
-            y = batch[1].to(DEVICE).float()
-            y = y.squeeze()
-            y = y.view(-1, 1)
-
-            # fixer les coefficients par défaut
-            iw = None
-            pi = None
-
-            # extraction des coefficients en fonction de la loss appelée
-            if loss_name == "nLiteMSE":
-                    iw = batch[4].to(DEVICE).unsqueeze(1).float()
-            elif loss_name == "nMSE":
-                iw = batch[4].to(DEVICE).unsqueeze(1).float()
-                pi = batch[5].to(DEVICE).unsqueeze(1).float()
+            # Support different dataset batch formats:
+            # - Challenge dataset -> (X, y, gender, filename, iw, pi, gw)
+            # - CelebA dataset -> (X, y)
+            if isinstance(batch, (list, tuple)) and len(batch) >= 7:
+                X = batch[0].to(DEVICE)
+                y = batch[1].float().to(DEVICE).view(-1, 1)
+                gender = batch[2].float().to(DEVICE).view(-1, 1)
+                iw = batch[4].float().unsqueeze(1).to(DEVICE)
+                pi = batch[5].float().unsqueeze(1).to(DEVICE)
+                gw = batch[6].float().unsqueeze(1).to(DEVICE)
+            elif isinstance(batch, (list, tuple)) and len(batch) == 2:
+                X = batch[0].to(DEVICE)
+                y = batch[1].float().to(DEVICE).view(-1, 1)
+                # defaults for missing fields (CelebA has no gender/weights)
+                gender = torch.zeros_like(y, device=DEVICE, dtype=torch.float32)
+                iw = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
+                try:
+                    pi = (1.0 / 30.0 + y).to(device=DEVICE, dtype=torch.float32)
+                except Exception:
+                    pi = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
+                gw = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
+            else:
+                # generic fallback: attempt to unpack minimally
+                X = batch[0].to(DEVICE)
+                y = batch[1].float().to(DEVICE).view(-1, 1)
+                gender = torch.zeros_like(y, device=DEVICE, dtype=torch.float32)
+                iw = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
+                pi = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
+                gw = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
 
             y_pred = model(X)
-            # If using PWGLoss, extract gw/gender and call base_loss directly
-            if loss_name == "PWGLoss":
-                gender = None
-                gw = None
-                if len(batch) > 6:
-                    # batch: X, y, gender, filename, iw, pi, gw
-                    gender = batch[2].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
-                    gw = batch[6].to(DEVICE).unsqueeze(1).float()
-                loss = base_loss(y_pred, y, iw, pi, gw, gender)
-
+            loss = loss_fn(y_pred, y, iw, pi, gw, gender)
             running_loss += loss.item()
             progress_bar.set_postfix(loss=f"{loss.item():.4f}")
 
@@ -129,53 +139,64 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         # boucle d'évaluation
         model.eval()
         val_loss = 0
+        all_preds, all_targets, all_iw, all_pi, all_genders = [], [], [], [], []
         with torch.inference_mode():
             for batch in val_loader:
-                X_val = batch[0].to(DEVICE)
-                # normalize y_val to shape [B,1]
-                y_val = batch[1].to(DEVICE).float()
-                y_val = y_val.squeeze()
-                y_val = y_val.view(-1, 1)
+                # robust unpack for validation batches (same logic as training)
+                if isinstance(batch, (list, tuple)) and len(batch) >= 7:
+                    X_val = batch[0].to(DEVICE)
+                    y_val = batch[1].float().to(DEVICE).view(-1, 1)
+                    gender_val = batch[2].float().to(DEVICE).view(-1, 1)
+                    iw_val = batch[4].float().unsqueeze(1).to(DEVICE)
+                    pi_val = batch[5].float().unsqueeze(1).to(DEVICE)
+                    gw_val = batch[6].float().unsqueeze(1).to(DEVICE)
+                elif isinstance(batch, (list, tuple)) and len(batch) == 2:
+                    X_val = batch[0].to(DEVICE)
+                    y_val = batch[1].float().to(DEVICE).view(-1, 1)
+                    gender_val = torch.zeros_like(y_val, device=DEVICE, dtype=torch.float32)
+                    iw_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
+                    try:
+                        pi_val = (1.0 / 30.0 + y_val).to(device=DEVICE, dtype=torch.float32)
+                    except Exception:
+                        pi_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
+                    gw_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
+                else:
+                    X_val = batch[0].to(DEVICE)
+                    y_val = batch[1].float().to(DEVICE).view(-1, 1)
+                    gender_val = torch.zeros_like(y_val, device=DEVICE, dtype=torch.float32)
+                    iw_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
+                    pi_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
+                    gw_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
 
-                # validation: handle possible presence of iw/pi
-                # iw_val = None
-                # pi_val = None
-                # if loss_name == "nLiteMSE":
-                #     iw_val = batch[4].to(DEVICE).unsqueeze(1).float()
-                # elif loss_name == "nMSE":
-                #     iw_val = batch[4].to(DEVICE).unsqueeze(1).float()
-                #     pi_val = batch[5].to(DEVICE).unsqueeze(1).float()
+                y_pred_val = model(X_val)
+                val_loss += loss_fn(y_pred_val, y_val, iw_val, pi_val, gw_val, gender_val).item()
 
-                
-                # if loss_name == "PWGLoss":
-                #     gender_val = None
-                #     gw_val = None
-                #     if len(batch) > 6:
-                #         gender_val = batch[2].to(DEVICE).unsqueeze(1).float()
-                #         gw_val = batch[6].to(DEVICE).unsqueeze(1).float()
-                #     loss_v = base_loss(y_pred_val, y_val, iw_val, pi_val, gw_val, gender_val)
-
-                iw = None
-                pi = None
-                gw = None
-                gender = None
-
-            # 2. Remplacement uniquement si disponible dans le batch
-                if loss_name == "nLiteMSE":
-                    iw = batch[4].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
-                elif loss_name == "nMSE":
-                    iw = batch[4].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
-                    pi = batch[5].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
-                elif loss_name == "PWGLoss" and len(batch) > 6:
-                    gender = batch[2].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
-                    iw = batch[4].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
-                    pi = batch[5].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
-                    gw = batch[6].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
-
-                y_pred = model(X_val)
-                loss = loss_fn(y_pred, y, iw, pi, gw, gender)
+                all_preds.append(y_pred_val)
+                all_targets.append(y_val)
+                all_iw.append(iw_val)
+                all_pi.append(pi_val)
+                all_genders.append(gender_val)
                 
         final_val_loss = val_loss / len(val_loader)
+
+        val_score, val_err_f, val_err_m = score_fn(
+            torch.cat(all_preds), torch.cat(all_targets),
+            torch.cat(all_iw), torch.cat(all_pi), torch.cat(all_genders)
+        )
+        val_score = val_score.item()
+        val_err_f = val_err_f.item()
+        val_err_m = val_err_m.item()
+
+        mlflow.log_metric("lr", optimizer.param_groups[0]["lr"], step=global_step)
+        mlflow.log_metric("train_loss", final_loss, step=global_step)
+        mlflow.log_metric("val_loss", val_loss, step=global_step)
+        mlflow.log_metric("val_score", val_score, step=global_step)
+        mlflow.log_metric("val_err_female", val_err_f, step=global_step)
+        mlflow.log_metric("val_err_male", val_err_m, step=global_step)
+        mlflow.log_metric("epoch_time_s", time.time() - epoch_start, step=global_step)
+        global_step += 1
+
+        scheduler.step()
 
         # enregistrement des métriques sur MLflow
         mlflow.log_metric(key="lr", value=scheduler.get_last_lr()[0], step=n)
@@ -189,11 +210,12 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         scheduler.step()
 
         # sauvegarde du modèle en local et mlflow
-        if final_val_loss < best_loss:
-            best_loss = final_val_loss
+        if val_score < best_score:
+            best_score = val_score
             patience_counter = 0
-            print(f"modèle sauvegardé à l'époque {n+1} - Val Loss: {final_val_loss:.4f}")
-            torch.save(model.state_dict(), save_path)
+            state_dict = model._orig_mod.state_dict() if hasattr(model, "_orig_mod") else model.state_dict()
+            torch.save(state_dict, save_path)
+            print(f"checkpoint saved (val_score={val_score:.4f})")
         else:
             patience_counter += 1
 

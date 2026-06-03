@@ -15,7 +15,7 @@ N_SAMPLE = cfg_glob.get("N_SAMPLES")
 
 bins = np.linspace(0, 1, N_BINS + 1)
 bin_center = (bins[:-1] + bins[1:]) / 2
-eps = 1e-6
+eps = cfg_glob.get("EPS", 1e-8)
 
 df_train_raw = pd.read_csv(CSV_DIR / "train.csv", delimiter=',')
 df_test_raw = pd.read_csv(CSV_DIR / "test_students.csv", delimiter=',')

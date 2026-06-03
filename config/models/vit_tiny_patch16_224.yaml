@@ -41,7 +41,7 @@ probing_training:
     hidden_size: 512
 
 lora_training:
-  run_execution: False
+  run_execution: True
   loss_name: "PWGLoss"
   learning_rate: 2.0e-4
   num_epoch: 1

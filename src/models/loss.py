@@ -1,3 +1,4 @@
+import inspect
 import torch
 import torch.nn as nn
 
@@ -8,7 +9,7 @@ from src.config import*
 from src.config_utils import load_config
 
 cfg_glob = load_config(CONFIG_DEFAULT).get("globaux", {})
-EPS= cfg_glob.get("EPS", 1e-8)
+EPS= float(cfg_glob.get("EPS", 1e-8))
     
 class WeightedMSELoss(nn.Module):
     def __init__(self):
@@ -44,21 +45,41 @@ class UniversalLossWrapper(nn.Module):
         self.is_weighted = isinstance(base_loss, WeightedMSELoss)
         self.is_lite_weighted = isinstance(base_loss,WeightedLiteMSELoss)
 
-    def forward(self, y_pred, y_true, iw=None, w_pdf=None):
-        # Accept flexible args/kwargs to support custom losses (e.g. PWGLoss)
-        # If the wrapped loss is one of the known weighted variants, call it using
-        # the canonical signature; otherwise forward all args to the base loss.
-        if self.is_weighted:
-            return self.base_loss(y_pred, y_true, iw, w_pdf)
-        elif self.is_lite_weighted:
-            return self.base_loss(y_pred, y_true, iw)
-
-        # Fallback: forward any additional positional/keyword args directly.
+    def forward(self, *args, **kwargs):
+       
+        # Try direct forwarding first
         try:
-            return self.base_loss(y_pred, y_true, iw, w_pdf)
+            return self.base_loss(*args, **kwargs)
         except TypeError:
-            # Last-resort: call with flexible signature
-            return self.base_loss(y_pred, y_true, iw, w_pdf)
+            # Build from positional args when possible
+            if len(args) >= 2:
+                y_pred_loc, y_true_loc = args[0], args[1]
+            else:
+                # Can't dispatch without at least y_pred/y_true
+                raise
+
+            # Weighted loss signature: (y_pred, y_true, iw, pi)
+            if self.is_weighted:
+                iw_loc = args[2] if len(args) > 2 else kwargs.get('iw')
+                pi_loc = args[3] if len(args) > 3 else kwargs.get('pi')
+                return self.base_loss(y_pred_loc, y_true_loc, iw_loc, pi_loc)
+
+            # Lite weighted: (y_pred, y_true, iw)
+            if self.is_lite_weighted:
+                iw_loc = args[2] if len(args) > 2 else kwargs.get('iw')
+                return self.base_loss(y_pred_loc, y_true_loc, iw_loc)
+
+            # PWG-like or other custom losses: attempt to map common extra args
+            iw_loc = args[2] if len(args) > 2 else kwargs.get('iw')
+            pi_loc = args[3] if len(args) > 3 else kwargs.get('pi')
+            gw_loc = args[4] if len(args) > 4 else kwargs.get('gw')
+            gender_loc = args[5] if len(args) > 5 else kwargs.get('gender')
+
+            try:
+                return self.base_loss(y_pred_loc, y_true_loc, iw_loc, pi_loc, gw_loc, gender_loc)
+            except TypeError:
+                # Last resort: call with just y_pred, y_true
+                return self.base_loss(y_pred_loc, y_true_loc)
 
     
 class PWGLoss(nn.Module):
@@ -70,7 +91,22 @@ class PWGLoss(nn.Module):
         combined_weights = iw * pi * gw
         return torch.sum(combined_weights * (y_true - y_pred) ** 2) / (torch.sum(combined_weights)+EPS)
     
+def build_loss_fn(cfg_method):
+    # Accept either a config dict (with 'loss_name') or a direct loss name string
+    if isinstance(cfg_method, str):
+        loss_name = cfg_method
+        cfg = {}
+    elif isinstance(cfg_method, dict):
+        cfg = cfg_method
+        loss_name = cfg.get("loss_name")
 
+
+    loss_cls = LOSS_MAPPING[loss_name]
+    supported = inspect.signature(loss_cls.__init__).parameters
+    loss_kwargs = {"alpha": cfg.get("loss_alpha")} if "loss_alpha" in cfg and "alpha" in supported else {}
+
+    loss_kwargs = {k: v for k, v in loss_kwargs.items() if v is not None}
+    return UniversalLossWrapper(loss_cls(**loss_kwargs))
 
 # Loss mapping
 LOSS_MAPPING = {

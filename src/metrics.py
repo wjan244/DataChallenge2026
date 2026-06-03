@@ -1,6 +1,14 @@
 import numpy as np
 import pandas as pd
+import torch
 
+import torch.nn as nn
+
+from src.config import*
+from src.config_utils import load_config
+
+cfg_glob = load_config(CONFIG_DEFAULT).get("globaux", {})
+eps = float(cfg_glob.get("EPS", 1e-8))
 
 def error_fn(df: pd.DataFrame, w=None) -> float:
     pred = df.loc[:, "pred"].astype(float).to_numpy()
@@ -27,3 +35,17 @@ def metric_fn(female: pd.DataFrame, male: pd.DataFrame, w=None) -> float:
 
     return float((err_male + err_female) / 2 + abs(err_male - err_female))
 
+
+class PWScore(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, y_pred, y_true, iw, pi, gender):
+        w  = (iw * pi).view(-1)
+        se = ((y_true - y_pred) ** 2).view(-1)
+        g  = gender.view(-1)
+        mask_f = g == 0.0
+        mask_m = g == 1.0
+        err_f = torch.sum(w[mask_f] * se[mask_f]) / (torch.sum(w[mask_f]) + eps)
+        err_m = torch.sum(w[mask_m] * se[mask_m]) / (torch.sum(w[mask_m]) + eps)
+        return (err_f + err_m) / 2 + torch.abs(err_f - err_m), err_f, err_m
