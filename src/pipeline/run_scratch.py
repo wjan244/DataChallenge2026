@@ -17,7 +17,7 @@ def run_scratch(cfg, timestamp, experiment_id): #precedent_run_id=None,
     if cfg_method["run_execution"] != True:
         return None, None
 
-    if cfg_method["loss_name"] not in ("nMSE", "nLiteMSE", "PGWLoss", "PGWLossRegularized"):
+    if cfg_method["loss_name"] not in ("nMSE", "nLiteMSE", "PWGLoss", "PWGLossRegularized"):
         raise ValueError(f"Wrong Loss name {cfg_method['loss_name']}. Exiting")
     
     method_FT = cfg_method["method_FT"]
@@ -69,7 +69,9 @@ def run_scratch(cfg, timestamp, experiment_id): #precedent_run_id=None,
         save_path = CHECKPOINT_DIR / f"{timestamp}_{cfg_mod}_{method_FT}.pt"
         
         loss_cls = LOSS_MAPPING[cfg_method["loss_name"]]
-        loss_kwargs = {"alpha": cfg_method["loss_alpha"]} if "loss_alpha" in cfg_method else {}
+        import inspect
+        supported = inspect.signature(loss_cls.__init__).parameters
+        loss_kwargs = {"alpha": cfg_method["loss_alpha"]} if "loss_alpha" in cfg_method and "alpha" in supported else {}
         loss_fn = UniversalLossWrapper(loss_cls(**loss_kwargs))
         #loss_fn = UniversalLossWrapper(LOSS_MAPPING[cfg_method["loss_name"]]())
         

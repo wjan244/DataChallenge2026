@@ -94,6 +94,6 @@ LOSS_MAPPING = {
     "BCE": nn.BCELoss,
     "nMSE": WeightedMSELoss,
     "nLiteMSE": WeightedLiteMSELoss,
-    "PGWLoss": PWGLoss,
-    "PGWLossRegularized": PWGLossRegularized,
+    "PWGLoss": PWGLoss,
+    "PWGLossRegularized": PWGLossRegularized,
 }
