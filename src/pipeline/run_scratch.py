@@ -75,7 +75,7 @@ def run_scratch(cfg, timestamp, experiment_id): #precedent_run_id=None,
         trainable, _ = _count_trainable_params(model)
         mlflow.log_metric("trainable_params", trainable, step=0)
         
-        global_step, best_score = _train_phase(
+        global_step, best_score, _ = _train_phase(
             model, train_loader, val_loader, loss_fn, cfg_glob, cfg_method,
             lr=learning_rate, num_epoch=num_epoch,
             phase_idx=0, save_path=save_path, global_step=global_step, best_score=best_score

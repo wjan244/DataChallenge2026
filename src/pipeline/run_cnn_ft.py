@@ -8,7 +8,7 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 from src.config import *
-from src.data.data_utils import lookup_gender_weights, get_challenge_split
+from src.data.data_utils import get_challenge_split
 from src.data.data_loader import *
 from src.models.models import OcclusionModel
 from src.models.finetuning import inject_linear_mlp_probing
@@ -39,7 +39,8 @@ def _unfreeze_head(model):
             param.requires_grad = True
             
 def _unfreeze_top_n_blocks(model, n):
-    backbone = model.model if hasattr(model, "model") else model
+    raw = model._orig_mod if hasattr(model, "_orig_mod") else model
+    backbone = raw.model if hasattr(raw, "model") else raw
     if hasattr(backbone, "blocks"):
         for block in list(backbone.blocks)[-n:]:
             for param in block.parameters():
@@ -49,13 +50,25 @@ def _unfreeze_top_n_blocks(model, n):
                 
 def _train_phase(model, train_loader, val_loader, loss_fn,
                  cfg_glob, cfg_method,
-                 lr, num_epoch, phase_idx, save_path, global_step, best_score=float("inf")):
+                 lr, num_epoch, phase_idx, save_path, global_step, best_score=float("inf"),
+                 optimizer=None):
     patience = cfg_glob["PATIENCE"]
     l2_weight_decay = cfg_method.get("l2_weight_decay", 0)
     score_fn = PWScore()
 
-    optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, model.parameters()), lr=lr, weight_decay=l2_weight_decay)
+    if optimizer is None:
+        optimizer = torch.optim.Adam(
+            filter(lambda p: p.requires_grad, model.parameters()), lr=lr, weight_decay=l2_weight_decay
+        )
+    else:
+        # add params unfrozen since the last phase as a new group at the new lr
+        existing_ids = {id(p) for group in optimizer.param_groups for p in group["params"]}
+        new_params = [p for p in model.parameters() if p.requires_grad and id(p) not in existing_ids]
+        if new_params:
+            optimizer.add_param_group({"params": new_params, "lr": lr, "weight_decay": l2_weight_decay})
+        # lower the lr for all existing groups to match the current phase
+        for group in optimizer.param_groups:
+            group["lr"] = lr
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epoch, eta_min=0)
     patience_counter = 0
@@ -88,7 +101,7 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
 
             model.eval()
             val_loss = 0.0
-            val_score = 0.0
+            all_preds, all_targets, all_iw, all_pi, all_genders = [], [], [], [], []
             with torch.inference_mode():
                 for batch in val_loader:
                     X_val = batch[0].to(DEVICE)
@@ -99,16 +112,27 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
                     pi_val = batch[5].to(DEVICE).unsqueeze(1).float()
                     gw_val = batch[6].to(DEVICE).unsqueeze(1).float()
                     val_loss += loss_fn(y_pred_val, y_val, iw_val, pi_val, gw_val, gender_val).item()
-                    iter_score, _, _ = score_fn(y_pred_val, y_val, iw_val, pi_val, gender_val)
-                    val_score += iter_score.item()
-                    
+                    all_preds.append(y_pred_val)
+                    all_targets.append(y_val)
+                    all_iw.append(iw_val)
+                    all_pi.append(pi_val)
+                    all_genders.append(gender_val)
+
             val_loss /= len(val_loader)
-            val_score /= len(val_loader)
+            val_score, val_err_f, val_err_m = score_fn(
+                torch.cat(all_preds), torch.cat(all_targets),
+                torch.cat(all_iw), torch.cat(all_pi), torch.cat(all_genders)
+            )
+            val_score = val_score.item()
+            val_err_f = val_err_f.item()
+            val_err_m = val_err_m.item()
 
             mlflow.log_metric("lr", optimizer.param_groups[0]["lr"], step=global_step)
             mlflow.log_metric("train_loss", train_loss, step=global_step)
             mlflow.log_metric("val_loss", val_loss, step=global_step)
             mlflow.log_metric("val_score", val_score, step=global_step)
+            mlflow.log_metric("val_err_female", val_err_f, step=global_step)
+            mlflow.log_metric("val_err_male", val_err_m, step=global_step)
             mlflow.log_metric("epoch_time_s", time.time() - epoch_start, step=global_step)
             global_step += 1
 
@@ -119,7 +143,7 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
                 patience_counter = 0
                 state_dict = model._orig_mod.state_dict() if hasattr(model, "_orig_mod") else model.state_dict()
                 torch.save(state_dict, save_path)
-                print(f"  → checkpoint saved (val_loss={val_loss:.4f})")
+                print(f"  → checkpoint saved (val_score={val_score:.4f})")
             else:
                 patience_counter += 1
 
@@ -127,7 +151,7 @@ def _train_phase(model, train_loader, val_loader, loss_fn,
                 print(f"  → early stop at epoch {epoch+1}")
                 break
 
-    return global_step, best_score
+    return global_step, best_score, optimizer
 
 
 def run_cnn_ft(cfg, timestamp, experiment_id):
@@ -202,7 +226,7 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
         logger.info(f"Phase 0 — head warmup | trainable: {trainable:,} / {total_params:,} | lr={learning_rate}")
         mlflow.log_metric("trainable_params", trainable, step=0)
         print(f"\n=== Phase 0: head warmup (lr={learning_rate}) ===")
-        global_step, best_score = _train_phase(
+        global_step, best_score, optimizer = _train_phase(
             model, train_loader, val_loader, loss_fn, cfg_glob, cfg_method,
             lr=learning_rate, num_epoch=num_epoch_head,
             phase_idx=0, save_path=save_path, global_step=global_step, best_score=best_score
@@ -211,7 +235,8 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
         # Phases 1..n_phases: progressive unfreezing
         if n_phases != 0:
             print(f"Unfreezing progressively the backbone in {n_phases} phases")
-            blocks_per_phase = int(np.ceil(len(model.model.blocks)/n_phases))
+            raw_model = model._orig_mod if hasattr(model, "_orig_mod") else model
+            blocks_per_phase = int(np.ceil(len(raw_model.model.blocks)/n_phases))
             for phase in range(1, n_phases + 1):
                 lr = learning_rate * (lr_decay_factor ** phase)
                 n_unfrozen = phase * blocks_per_phase
@@ -222,10 +247,11 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
                 trainable, _ = _count_trainable_params(model)
                 logger.info(f"Phase {phase} — unfreeze top {n_unfrozen} blocks | trainable: {trainable:,} / {total_params:,} | lr={lr:.2e}")
                 mlflow.log_metric("trainable_params", trainable, step=phase)
-                global_step, best_score = _train_phase(
+                global_step, best_score, optimizer = _train_phase(
                     model, train_loader, val_loader, loss_fn, cfg_glob, cfg_method,
                     lr=lr, num_epoch=num_epoch_per_phase,
-                    phase_idx=phase, save_path=save_path, global_step=global_step, best_score=best_score
+                    phase_idx=phase, save_path=save_path, global_step=global_step, best_score=best_score,
+                    optimizer=optimizer
                 )
         else:
             print(f"{n_phases} = 0: skipping backbone finetuning")
