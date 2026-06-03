@@ -268,6 +268,11 @@ def run_cnn_ft(cfg, timestamp, experiment_id):
             lr=learning_rate, num_epoch=num_epoch_head,
             phase_idx=0, save_path=save_path, global_step=global_step, best_score=best_score
         )
+        run_evaluation(
+            timestamp=timestamp, val_loader=val_loader, loss_name=cfg_method["loss_name"],
+            method_FT=method_FT, cfg_glob=cfg_glob, cfg_mod=cfg_mod,
+            prefix=method_FT, method_kwargs=mkwargs, index="phase_0", save_val_csv=False
+        )
 
         # Phases 1..n_phases: progressive unfreezing
         if n_phases != 0:
