@@ -15,7 +15,8 @@ def run_lora(cfg, timestamp, experiment_id, precedent_run_id=None, precedent_met
 
     if cfg_method["run_execution"]==True:
         print(f"début d'entrainement par {cfg_method['method_FT']}")
-        with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_{cfg_method['method_FT']}"):
+        with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_{cfg_method['method_FT']}") as run:
+            print(f"MLflow run: {mlflow.get_tracking_uri()}/#/experiments/{experiment_id}/runs/{run.info.run_id}")
             get_challenge_train_loader = globals()[cfg_method["loader_factory"]]
             get_challenge_val_loader = globals()[cfg_method["val_loader_factory"]]
 
@@ -39,7 +40,6 @@ def run_lora(cfg, timestamp, experiment_id, precedent_run_id=None, precedent_met
             test_loader = get_challenge_test_loader(df_test, cfg_glob["BATCH_SIZE"], NUM_WORKERS,model_name=cfg_mod)
             run_test(timestamp, cfg_glob, test_loader, cfg_method["method_FT"], cfg_mod, method_kwargs=cfg_method_lora.get("method_kwargs"))
             save_split_predictions(timestamp, train_loader, "train", cfg_method["method_FT"], cfg_mod, cfg_method.get("method_kwargs"))
-            save_split_predictions(timestamp, val_loader, "val", cfg_method["method_FT"], cfg_mod, cfg_method.get("method_kwargs"))
 
         print(f"fin d'entrainement par {cfg_method['method_FT']}")
 

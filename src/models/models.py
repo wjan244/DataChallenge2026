@@ -77,11 +77,12 @@ def get_model(timestamp,cfg_mod, cfg_method,precedent_run_id,precedent_method, n
 
 
 if __name__ == "__main__":
-    from src.config_utils import load_config
-    
+    from src.config_utils import load_config    
     cfg = load_config("beit3_base_patch16_224.yaml")
-    
+
     # On teste en passant le dictionnaire d'hyperparamètres du YAML via **
+    # if scratch model, instantiate model
+
     model = get_model(
         model_name=cfg["model"], 
         num_classes=1, 

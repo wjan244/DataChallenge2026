@@ -40,7 +40,7 @@ def main(file_name):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="BEiT-1k-Face-55w.yaml",
+    parser.add_argument("--config", default="vit_base_patch16_dinov3.lvd1689m.yaml",
                         help="YAML filename inside config/models/")
     args = parser.parse_args()
     

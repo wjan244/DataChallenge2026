@@ -8,7 +8,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent # pointer directement vers la racine
 
 DATA = BASE_DIR / "data"
-IMG_DIR = DATA / "Crop_224_5fp_100K" 
+IMG_DIR = DATA / "Crop_224_5fp_100K"
 CSV_DIR = DATA / "occlusion_datasets"
 
 SCREENSHOT_PATH = DATA / "test_distribution.png"
@@ -20,6 +20,7 @@ HISTORY_DIR = BASE_DIR / "history"
 CONFIG = BASE_DIR / "config"
 CONFIG_DEFAULT = CONFIG/"pipeline_default.yaml"
 CONFIG_MODELS = CONFIG/"models"
+
 
 # device
 if torch.backends.mps.is_available():

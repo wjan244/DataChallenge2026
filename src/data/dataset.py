@@ -18,8 +18,8 @@ from src.data.data_stats import lookup_gender_weights, compute_gender_weights
 class Dataset(torch.utils.data.Dataset):
     
     def __init__(self, df:pd.DataFrame, image_dir:str, training:bool=True, transform:Optional[Callable]=True)->None:
-         
-         self.training = training
+
+         self.training_or_validation = training
          self.image_dir = image_dir
          self.df = df
          self.transform = transform if transform else transforms.ToTensor()

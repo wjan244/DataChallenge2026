@@ -5,15 +5,18 @@ import timm
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
+from src.data import DATA_MEAN, STD_MEAN
 from src.config import*
+from src.models import CUSTOM_MODELS
 
 _PIN = DEVICE.type == "cuda"
 _PW  = NUM_WORKERS > 0
 from src.data.dataset import Dataset, ChallengeTrain, CelebA
 from src.data.data_utils import get_challenge_split
 from src.data.transforms import get_augmentation_finetuning_transforms,get_augmentation_pretrained_transforms
-
-
+    
+    
+    
 def get_challenge_train_loader(batch_size: int, num_workers: int = NUM_WORKERS, model_name: str = None, augmentation: bool = None) -> DataLoader:
     """Génère le DataLoader d'entraînement pour le challenge (Format: image, target)."""
     df_train, _, _, _ = get_challenge_split()

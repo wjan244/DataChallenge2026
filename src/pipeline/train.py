@@ -10,11 +10,9 @@ from tqdm import tqdm
 from src.config import*
 
 from src.data.data_utils import get_challenge_split
-from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
+from src.models.loss import LOSS_MAPPING, UniversalLossWrapper
 from src.models.models import get_model
 
-# Loss mapping
-LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLiteMSE":WeightedLiteMSELoss}
 
 
 def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method,
@@ -109,7 +107,15 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
                 pi = batch[5].to(DEVICE).unsqueeze(1).float()
 
             y_pred = model(X)
-            loss = loss_fn(y_pred, y, iw, pi)
+            # If using PWGLoss, extract gw/gender and call base_loss directly
+            if loss_name == "PWGLoss":
+                gender = None
+                gw = None
+                if len(batch) > 6:
+                    # batch: X, y, gender, filename, iw, pi, gw
+                    gender = batch[2].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
+                    gw = batch[6].to(DEVICE).unsqueeze(1).float()
+                loss = base_loss(y_pred, y, iw, pi, gw, gender)
 
             running_loss += loss.item()
             progress_bar.set_postfix(loss=f"{loss.item():.4f}")
@@ -132,18 +138,43 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
                 y_val = y_val.view(-1, 1)
 
                 # validation: handle possible presence of iw/pi
-                iw_val = None
-                pi_val = None
+                # iw_val = None
+                # pi_val = None
+                # if loss_name == "nLiteMSE":
+                #     iw_val = batch[4].to(DEVICE).unsqueeze(1).float()
+                # elif loss_name == "nMSE":
+                #     iw_val = batch[4].to(DEVICE).unsqueeze(1).float()
+                #     pi_val = batch[5].to(DEVICE).unsqueeze(1).float()
+
+                
+                # if loss_name == "PWGLoss":
+                #     gender_val = None
+                #     gw_val = None
+                #     if len(batch) > 6:
+                #         gender_val = batch[2].to(DEVICE).unsqueeze(1).float()
+                #         gw_val = batch[6].to(DEVICE).unsqueeze(1).float()
+                #     loss_v = base_loss(y_pred_val, y_val, iw_val, pi_val, gw_val, gender_val)
+
+                iw = None
+                pi = None
+                gw = None
+                gender = None
+
+            # 2. Remplacement uniquement si disponible dans le batch
                 if loss_name == "nLiteMSE":
-                    iw_val = batch[4].to(DEVICE).unsqueeze(1).float()
+                    iw = batch[4].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
                 elif loss_name == "nMSE":
-                    iw_val = batch[4].to(DEVICE).unsqueeze(1).float()
-                    pi_val = batch[5].to(DEVICE).unsqueeze(1).float()
+                    iw = batch[4].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
+                    pi = batch[5].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
+                elif loss_name == "PWGLoss" and len(batch) > 6:
+                    gender = batch[2].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
+                    iw = batch[4].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
+                    pi = batch[5].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
+                    gw = batch[6].to(device=DEVICE, dtype=torch.float32).unsqueeze(1)
 
-                y_pred_val = model(X_val)
-                loss_v = loss_fn(y_pred_val, y_val, iw_val, pi_val)
-                val_loss += loss_v.item()
-
+                y_pred = model(X_val)
+                loss = loss_fn(y_pred, y, iw, pi, gw, gender)
+                
         final_val_loss = val_loss / len(val_loader)
 
         # enregistrement des métriques sur MLflow

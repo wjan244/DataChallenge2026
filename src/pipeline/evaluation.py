@@ -15,7 +15,7 @@ from src.models.loss import WeightedLiteMSELoss,UniversalLossWrapper,WeightedMSE
 # Loss mapping
 LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLiteMSE":WeightedLiteMSELoss}
 
-def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None, cfg_mod=None, prefix=None, method_kwargs: dict | None = None, index:str=None)->None:
+def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None, cfg_mod=None, prefix=None, method_kwargs: dict | None = None, index:str=None, save_val_csv: bool = True)->None:
 
     """
     Pipe d'évalualtion:
@@ -171,6 +171,11 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None,
                     results_list.append(row)
                     
         results_df = pd.DataFrame(results_list)
+
+        if save_val_csv:
+            val_csv_path = SUBMISSION_DIR / f"{timestamp}_submission_{model_tag}" / "val.csv"
+            val_csv_path.parent.mkdir(parents=True, exist_ok=True)
+            results_df[["filename", "FaceOcclusion", "pred", "gender", "iw"]].to_csv(val_csv_path, index=False)
 
         # evaluation
         results_male = results_df.loc[results_df["gender"] == 1.0]
