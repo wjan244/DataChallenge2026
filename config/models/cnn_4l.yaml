@@ -2,13 +2,13 @@ model: "convnet"
 
 globaux:
   BATCH_SIZE: 512
-  PATIENCE: 50
+  PATIENCE: 10
   VERBOSE: "WARNING"   # set to DEBUG to see step-by-step training logs
   COMPILE: True
 
 scratch_training:
   run_execution: True
-  loss_name: "PWGLoss"
+  loss_name: "PWGLossRegularized"
   learning_rate: 1.0e-3
   l2_weight_decay: 1.0e-2
   num_epoch: 100

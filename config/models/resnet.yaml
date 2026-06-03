@@ -8,11 +8,11 @@ globaux:
 
 scratch_training:
   run_execution: True
-  pretrained_checkpoint: "2026-06-01_13-20-33_resnet18_scratch_training.pt"
-  loss_name: "nMSE"
-  learning_rate: 1.0e-7
-  l2_weight_decay: 1.0e-4
-  num_epoch: 500
+  loss_name: "PWGLossRegularized"
+  learning_rate: 1.0e-3
+  l2_weight_decay: 1.0e-3
+  num_epoch: 100
+  loss_alpha: 0.0
   augmentation: True
   method_FT: "scratch_training"
   loader_factory: "get_challenge_train_loader"
