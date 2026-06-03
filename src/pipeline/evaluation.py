@@ -235,10 +235,10 @@ def save_results(model, timestamp, train_loader, val_loader, test_loader,
                 filename = batch[1] if is_test else batch[3]
 
                 if not is_test:
-                    y      = batch[1].to(DEVICE).float().view(-1, 1)
-                    gender = batch[2].to(DEVICE).float().view(-1, 1)
-                    iw = batch[4].to(DEVICE).unsqueeze(1).float() if loss_name in ("nMSE", "nLiteMSE", "PGWLoss", "PGWLossRegularized") else None
-                    pi = batch[5].to(DEVICE).unsqueeze(1).float() if loss_name in ("nMSE", "PGWLoss", "PGWLossRegularized") else None
+                    y      = batch[1].float().to(DEVICE).view(-1, 1)
+                    gender = batch[2].float().to(DEVICE).view(-1, 1)
+                    iw = batch[4].float().to(DEVICE).unsqueeze(1) if loss_name in ("nMSE", "nLiteMSE", "PGWLoss", "PGWLossRegularized") else None
+                    pi = batch[5].float().to(DEVICE).unsqueeze(1) if loss_name in ("nMSE", "PGWLoss", "PGWLossRegularized") else None
 
                 for i in range(len(X)):
                     if is_test:
@@ -262,7 +262,7 @@ def save_results(model, timestamp, train_loader, val_loader, test_loader,
         if is_test:
             # submission format: filename, FaceOcclusion (prediction), gender='x'
             results_df[["filename", "FaceOcclusion", "gender"]].to_csv(out_dir / "test.csv", index=False)
-        else:
+        elif split == "val":
             results_df[["filename", "FaceOcclusion", "pred", "gender", "iw"]].to_csv(out_dir / f"{split}.csv", index=False)
 
             # unshifted
@@ -273,9 +273,9 @@ def save_results(model, timestamp, train_loader, val_loader, test_loader,
             score      = metric_fn(results_female, results_male)
 
             tag = model_tag
-            mlflow.log_metric(f"{tag}_score_{split}_not_shifted", score)
-            mlflow.log_metric(f"{tag}_err_female_{split}_not_shifted", err_female)
-            mlflow.log_metric(f"{tag}_err_male_{split}_not_shifted", err_male)
+            mlflow.log_metric(f"End_score_{split}_not_shifted", score)
+            mlflow.log_metric(f"End_err_female_{split}_not_shifted", err_female)
+            mlflow.log_metric(f"End_err_male_{split}_not_shifted", err_male)
 
             # shifted score (iw*pi weighted) on full split via PWScore
             if results_df["iw"].notna().all() and results_df["pi"].notna().all():
@@ -285,6 +285,6 @@ def save_results(model, timestamp, train_loader, val_loader, test_loader,
                 score_shifted, err_f_shifted, err_m_shifted = score_fn(
                     _t("pred"), _t("FaceOcclusion"), _t("iw"), _t("pi"), _t("gender")
                 )
-                mlflow.log_metric(f"{tag}_score_{split}_shifted_iw", float(score_shifted))
-                mlflow.log_metric(f"{tag}_err_female_{split}_shifted_iw", float(err_f_shifted))
-                mlflow.log_metric(f"{tag}_err_male_{split}_shifted_iw", float(err_m_shifted))
+                mlflow.log_metric(f"End_score_{split}_shifted_iw", float(score_shifted))
+                mlflow.log_metric(f"End_err_female_{split}_shifted_iw", float(err_f_shifted))
+                mlflow.log_metric(f"End_err_male_{split}_shifted_iw", float(err_m_shifted))
