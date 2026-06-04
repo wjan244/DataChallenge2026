@@ -73,7 +73,6 @@ class HuberPWGLossRegularized(nn.Module):
         
         return torch.sum(l) / (torch.sum(w)+EPS)
         
-        
 
     def forward(self, y_pred, y_true, iw, pi, gw, gender):
         w  = (iw * pi * gw).view(-1)
