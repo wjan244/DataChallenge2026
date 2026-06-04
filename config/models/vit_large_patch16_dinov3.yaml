@@ -1,4 +1,4 @@
-model: 'vit_base_patch16_dinov3.lvd1689m'
+model: 'vit_large_patch16_dinov3.lvd1689m'
 globaux:
   SEED : 42
   N_SAMPLE : 5000
@@ -9,7 +9,7 @@ globaux:
   
 probing_training:
   run_execution: True
-  loss_name: "PWGLoss"
+  loss_name: "nMSE"
   learning_rate: 1.0e-3
   num_epoch: 12
   augmentation: True
@@ -18,15 +18,12 @@ probing_training:
   val_loader_factory: "get_challenge_val_loader"
   val_split: "val_samp"
   method_kwargs:
-    rank: 8
-    alpha: 16
-    dropout: 0.2
     probing_type: "mlp_probing"
     hidden_size: 512
 
 lora_training:
   run_execution: True
-  loss_name: "PWGLoss"
+  loss_name: "nMSE"
   learning_rate: 2.0e-4
   num_epoch: 20
   augmentation: True

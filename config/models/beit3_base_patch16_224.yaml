@@ -34,9 +34,6 @@ probing_training:
   val_loader_factory: "get_challenge_val_loader"
   val_split: "val_samp"
   method_kwargs:
-    rank: 8
-    alpha: 16
-    dropout: 0.2
     probing_type: "mlp_probing"
     hidden_size: 512
 

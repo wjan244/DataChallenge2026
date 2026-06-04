@@ -2,7 +2,7 @@ import inspect
 import torch
 import torch.nn as nn
 
-import torch
+import torch 
 import torch.nn as nn
 
 from src.config import*
@@ -38,48 +38,22 @@ class WeightedLiteMSELoss(nn.Module):
             print("coefficient de reweighting indéfinis", e)
             return None
 
+
 class UniversalLossWrapper(nn.Module):
     def __init__(self, base_loss):
         super().__init__()
         self.base_loss = base_loss
-        self.is_weighted = isinstance(base_loss, WeightedMSELoss)
-        self.is_lite_weighted = isinstance(base_loss,WeightedLiteMSELoss)
 
-    def forward(self, *args, **kwargs):
-       
-        # Try direct forwarding first
-        try:
-            return self.base_loss(*args, **kwargs)
-        except TypeError:
-            # Build from positional args when possible
-            if len(args) >= 2:
-                y_pred_loc, y_true_loc = args[0], args[1]
-            else:
-                # Can't dispatch without at least y_pred/y_true
-                raise
+    def forward(self, y_pred, y_true, iw=None, w_pdf=None, gw=None, gender=None):
+        if isinstance(self.base_loss, WeightedMSELoss):
+            return self.base_loss(y_pred, y_true, iw, w_pdf)
+        if isinstance(self.base_loss, WeightedLiteMSELoss):
+            return self.base_loss(y_pred, y_true, iw)
+        if PWGLoss is not None and isinstance(self.base_loss, PWGLoss):
+            return self.base_loss(y_pred, y_true, iw, w_pdf, gw, gender)
 
-            # Weighted loss signature: (y_pred, y_true, iw, pi)
-            if self.is_weighted:
-                iw_loc = args[2] if len(args) > 2 else kwargs.get('iw')
-                pi_loc = args[3] if len(args) > 3 else kwargs.get('pi')
-                return self.base_loss(y_pred_loc, y_true_loc, iw_loc, pi_loc)
-
-            # Lite weighted: (y_pred, y_true, iw)
-            if self.is_lite_weighted:
-                iw_loc = args[2] if len(args) > 2 else kwargs.get('iw')
-                return self.base_loss(y_pred_loc, y_true_loc, iw_loc)
-
-            # PWG-like or other custom losses: attempt to map common extra args
-            iw_loc = args[2] if len(args) > 2 else kwargs.get('iw')
-            pi_loc = args[3] if len(args) > 3 else kwargs.get('pi')
-            gw_loc = args[4] if len(args) > 4 else kwargs.get('gw')
-            gender_loc = args[5] if len(args) > 5 else kwargs.get('gender')
-
-            try:
-                return self.base_loss(y_pred_loc, y_true_loc, iw_loc, pi_loc, gw_loc, gender_loc)
-            except TypeError:
-                # Last resort: call with just y_pred, y_true
-                return self.base_loss(y_pred_loc, y_true_loc)
+        # default: try calling with (y_pred, y_true)
+        return self.base_loss(y_pred, y_true)
 
     
 class PWGLoss(nn.Module):
@@ -112,6 +86,7 @@ def build_loss_fn(cfg_method):
 LOSS_MAPPING = {
     "MSE": nn.MSELoss,
     "BCE": nn.BCELoss,
+    "SL1":nn.SmoothL1Loss,
     "nMSE": WeightedMSELoss,
     "nLiteMSE": WeightedLiteMSELoss,
     "PWGLoss": PWGLoss}
