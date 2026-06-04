@@ -10,6 +10,7 @@ import mlflow
 from datetime import datetime
 from src.config import*
 from src.config_utils import load_config
+from src.pipeline.run_adversarial_probing import run_adversarial_probing
 from src.pipeline.run_domain_adaptation import run_domain_adaptation
 from src.pipeline.run_probing import run_probing
 from src.pipeline.run_lora import run_lora
@@ -35,6 +36,7 @@ def main(file_name):
     run_id, method = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
     run_id, method = run_probing(cfg,timestamp,experiment_id,precedent_run_id=run_id,precedent_method=method)
     run_id, method = run_lora(cfg, timestamp, experiment_id, precedent_run_id=run_id, precedent_method=method)
+    run_id, method = run_adversarial_probing(cfg, timestamp, experiment_id, precedent_run_id=run_id, precedent_method=method)
 
     
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ def save_split_predictions(timestamp, loader, split_name, method_FT, cfg_mod, me
     else:
         num_classes = 1
 
-    model = get_model(timestamp, cfg_mod, None, None, None, num_classes=num_classes, method=method_FT, **(method_kwargs or {}))
+    model = get_model(timestamp=timestamp, cfg_mod=cfg_mod, cfg_method=None, precedent_run_id=None, precedent_method=None, method=method_FT, **(method_kwargs or {}))
     model.load_state_dict(torch.load(checkpoint_path, map_location='cpu'))
     model = model.to(DEVICE)
     model.eval()
@@ -28,7 +28,13 @@ def save_split_predictions(timestamp, loader, split_name, method_FT, cfg_mod, me
     with torch.inference_mode():
         for batch in tqdm(loader, desc=f"predict {split_name}"):
             X = batch[0].to(DEVICE)
-            y_pred = model(X).view(-1)
+
+            outputs_split = model(X)
+            if isinstance(outputs_split, dict):
+                y_pred = outputs_split["head_0"].view(-1)
+            else:
+                y_pred = outputs_split.view(-1)
+
             y_true = batch[1].view(-1)
             genders = batch[2]
             filenames = batch[3]
@@ -65,7 +71,7 @@ def run_test(timestamp,cfg_glob,test_loader,method_FT,cfg_mod, method_kwargs: di
     checkpoint_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
 
      # instanciation du modèle
-    model = get_model(timestamp, cfg_mod, None, None, None, num_classes=cfg_glob['NUM_CLASSES'], method=method_FT, **(method_kwargs or {}))
+    model = get_model(timestamp=timestamp, cfg_mod=cfg_mod, cfg_method=None, precedent_run_id=None, precedent_method=None, method=method_FT, **(method_kwargs or {}))
     
     model.load_state_dict(torch.load(checkpoint_path,map_location='cpu'))
     model = model.to(DEVICE)
@@ -79,7 +85,12 @@ def run_test(timestamp,cfg_glob,test_loader,method_FT,cfg_mod, method_kwargs: di
         for batch_idx, (X, *_, filename) in progress_bar:
             # Transfer -> device
             X = X.to(DEVICE)
-            y_pred = model(X)
+            outputs_test = model(X)
+            if isinstance(outputs_test, dict):
+                y_pred = outputs_test["head_0"]
+            else:
+                y_pred = outputs_test
+
             for i in range(len(X)):
 
                 results_list.append({'filename': filename[i],

@@ -25,10 +25,11 @@ domain_adaptation_training:
     rank: 8
     alpha: 16
     dropout: 0.2
+    num_classes: 1
 
 probing_training:
   run_execution: True
-  loss_name: "nMSE"
+  loss_name: "SL1"
   learning_rate: 1.0e-3
   num_epoch: 1
   augmentation: True
@@ -39,10 +40,29 @@ probing_training:
   method_kwargs:
     probing_type: "mlp_probing"
     hidden_size: 512
+    num_classes: 1
+
+adversarial_probing_training:
+  run_execution: True
+  loss_name_1: "BCE"
+  loss_name_2: "nMSE"
+  learning_rate: 1.0e-3
+  num_epoch: 1
+  augmentation: True
+  method_FT: "reversial_probing_training"
+  loader_factory: "get_challenge_train_loader"
+  val_loader_factory: "get_challenge_val_loader"
+  val_split: "val_samp"
+  method_kwargs:
+    probing_type: "reversial_probing"
+    hidden_size: 512
+    num_head : 2
+    num_classes: 2
+    lambda: 1
 
 lora_training:
   run_execution: True
-  loss_name: "nMSE"
+  loss_name: "SL1"
   learning_rate: 2.0e-4
   num_epoch: 1
   augmentation: True
@@ -54,6 +74,7 @@ lora_training:
     rank: 8
     alpha: 16
     dropout: 0.2
+    num_classes: 1
 
 
 

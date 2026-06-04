@@ -39,6 +39,36 @@ class WeightedLiteMSELoss(nn.Module):
             return None
 
 
+# class UniversalLossWrapper(nn.Module):
+#     def __init__(self, base_loss):
+#         super().__init__()
+#         self.base_loss = base_loss
+
+#     def forward(self, y_pred, y_true, iw=None, w_pdf=None, gw=None, gender=None):
+#         if isinstance(self.base_loss, WeightedMSELoss):
+#             return self.base_loss(y_pred, y_true, iw, w_pdf)
+#         if isinstance(self.base_loss, WeightedLiteMSELoss):
+#             return self.base_loss(y_pred, y_true, iw)
+#         if PWGLoss is not None and isinstance(self.base_loss, PWGLoss):
+#             return self.base_loss(y_pred, y_true, iw, w_pdf, gw, gender)
+
+#         # default: try calling with (y_pred, y_true)
+#         # Some built-in losses use .view() internally which fails for
+#         # non-contiguous tensors; make tensors contiguous and use
+#         # reshape(-1) which is safe for arbitrary strides.
+#         try:
+#             if torch.is_tensor(y_pred):
+#                 y_pred_t = y_pred.contiguous().reshape(-1)
+#             else:
+#                 y_pred_t = y_pred
+#             if torch.is_tensor(y_true):
+#                 y_true_t = y_true.contiguous().reshape(-1)
+#             else:
+#                 y_true_t = y_true
+#             return self.base_loss(y_pred_t, y_true_t)
+#         except Exception:
+#             return self.base_loss(y_pred, y_true)
+
 class UniversalLossWrapper(nn.Module):
     def __init__(self, base_loss):
         super().__init__()
@@ -52,10 +82,30 @@ class UniversalLossWrapper(nn.Module):
         if PWGLoss is not None and isinstance(self.base_loss, PWGLoss):
             return self.base_loss(y_pred, y_true, iw, w_pdf, gw, gender)
 
-        # default: try calling with (y_pred, y_true)
-        return self.base_loss(y_pred, y_true)
+        # Remplacement du bloc par défaut pour gérer le reshape et la contiguïté en 2D [Batch, 1]
+        try:
+            if torch.is_tensor(y_pred):
+                # .reshape(-1, 1) est plus robuste que .view() et compatible avec le stride
+                y_pred_t = y_pred.contiguous().reshape(-1, 1)
+            else:
+                y_pred_t = y_pred
+                
+            if torch.is_tensor(y_true):
+                y_true_t = y_true.contiguous().reshape(-1, 1)
+            else:
+                y_true_t = y_true
 
-    
+            # Sécurité : Si les tailles ne correspondent pas (ex: résidu d'un dictionnaire mal extrait), 
+            # on aligne y_pred_t sur la taille du batch de y_true_t
+            if torch.is_tensor(y_pred_t) and torch.is_tensor(y_true_t):
+                if y_pred_t.shape[0] != y_true_t.shape[0]:
+                    y_pred_t = y_pred_t[:y_true_t.shape[0]]
+
+            return self.base_loss(y_pred_t, y_true_t)
+        except Exception:
+            return self.base_loss(y_pred, y_true)
+        
+            
 class PWGLoss(nn.Module):
     def __init__(self):
         super().__init__()

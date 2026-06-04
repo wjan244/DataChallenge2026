@@ -40,7 +40,6 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     loss_name = cfg_method["loss_name"]
     method_FT = cfg_method["method_FT"]
     patience = cfg_glob["PATIENCE"]
-    num_classes = cfg_glob["NUM_CLASSES"]
     loss_name = cfg_method["loss_name"]
 
     model_tag = f"{cfg_mod}_{method_FT}"
@@ -50,18 +49,18 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
 
     # instancier le modèle
     cfg_method_kwargs = cfg_method.get("method_kwargs") or {}
-    model = get_model(timestamp,cfg_mod,cfg_method,precedent_run_id,precedent_method, num_classes, 
-                      method_FT, **cfg_method_kwargs)
+    model = get_model(timestamp=timestamp, cfg_mod=cfg_mod, cfg_method=cfg_method, precedent_run_id=precedent_run_id, precedent_method=precedent_method,
+                      method=method_FT, **(cfg_method_kwargs or {}))
     
     # -> DEVICE
     model = model.to(DEVICE)
 
     # GD
     loss_fn = build_loss_fn(loss_name)
-        # optimizer
+    # optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-        # scheduler
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=num_epoch,eta_min=0,last_epoch=-1)
+    # scheduler
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=num_epoch, eta_min=0, last_epoch=-1)
     
     # paramétrisatio MLFlow
     hyper_params = {**cfg_glob, **{k: v for k, v in cfg_method.items() if k != "method_kwargs"}, **cfg_method_kwargs}
@@ -77,7 +76,6 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     score_fn = PWScore()
     # entrainement
     save_path = CHECKPOINT_DIR / f"{timestamp}_{model_tag}.pt"
-    best_loss = float('inf')
 
     # initialisation early stopping
     patience_counter = 0
@@ -124,8 +122,30 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
                 pi = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
                 gw = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
 
-            y_pred = model(X)
+            output = model(X)
+            # gesion de l'adversarial (output)
+            if isinstance(output,dict):
+                y_pred = output["head_0"]
+                y_pred_genre = output["head_1"]
+            else:
+                y_pred = output
+
             loss = loss_fn(y_pred, y, iw, pi, gw, gender)
+            # gesion de l'adversarial (loss)
+            if isinstance(output,dict):
+                criterion_fairness = torch.nn.BCELoss()
+                # Ensure adversarial head has same shape as gender target.
+                # If head returns 2-class probabilities ([B,2]), pick positive class.
+                if torch.is_tensor(y_pred_genre) and y_pred_genre.dim() == 2 and y_pred_genre.size(1) == 2:
+                    y_pred_genre = y_pred_genre[:, 1].unsqueeze(1)
+                # Align dtype/device
+                try:
+                    y_pred_genre = y_pred_genre.to(device=gender.device, dtype=gender.dtype)
+                except Exception:
+                    pass
+                loss_fairness = criterion_fairness(y_pred_genre, gender)
+                loss = loss + loss_fairness
+
             running_loss += loss.item()
             progress_bar.set_postfix(loss=f"{loss.item():.4f}")
 
@@ -168,8 +188,23 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
                     pi_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
                     gw_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
 
-                y_pred_val = model(X_val)
-                val_loss += loss_fn(y_pred_val, y_val, iw_val, pi_val, gw_val, gender_val).item()
+                output_val = model(X_val)
+                # gestion de l'adversarial pour la validation
+                if isinstance(output_val, dict):
+                    y_pred_val = output_val["head_0"]
+                    y_pred_genre_val = output_val["head_1"]
+                else:
+                    y_pred_val = output_val
+
+                batch_loss_val = loss_fn(y_pred_val, y_val, iw_val, pi_val, gw_val, gender_val)
+                
+                # gestion de l'adversarial pour la validation
+                if isinstance(output_val, dict):
+                    criterion_fairness = torch.nn.BCELoss()
+                    loss_fairness_val = criterion_fairness(y_pred_genre_val, gender_val)
+                    batch_loss_val = batch_loss_val + loss_fairness_val
+
+                val_loss += batch_loss_val.item()
 
                 all_preds.append(y_pred_val)
                 all_targets.append(y_val)
