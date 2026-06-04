@@ -75,37 +75,40 @@ class UniversalLossWrapper(nn.Module):
         self.base_loss = base_loss
 
     def forward(self, y_pred, y_true, iw=None, w_pdf=None, gw=None, gender=None):
+        if isinstance(self.base_loss, (PWGLoss,HuberPWGLossRegularized)):
+            return self.base_loss(y_pred, y_true, iw, w_pdf, gw, gender)
         if isinstance(self.base_loss, WeightedMSELoss):
             return self.base_loss(y_pred, y_true, iw, w_pdf)
         if isinstance(self.base_loss, WeightedLiteMSELoss):
             return self.base_loss(y_pred, y_true, iw)
-        if PWGLoss is not None and isinstance(self.base_loss, PWGLoss):
-            return self.base_loss(y_pred, y_true, iw, w_pdf, gw, gender)
+        return self.base_loss(y_pred, y_true)
 
-        # Remplacement du bloc par défaut pour gérer le reshape et la contiguïté en 2D [Batch, 1]
-        try:
-            if torch.is_tensor(y_pred):
-                # .reshape(-1, 1) est plus robuste que .view() et compatible avec le stride
-                y_pred_t = y_pred.contiguous().reshape(-1, 1)
-            else:
-                y_pred_t = y_pred
-                
-            if torch.is_tensor(y_true):
-                y_true_t = y_true.contiguous().reshape(-1, 1)
-            else:
-                y_true_t = y_true
-
-            # Sécurité : Si les tailles ne correspondent pas (ex: résidu d'un dictionnaire mal extrait), 
-            # on aligne y_pred_t sur la taille du batch de y_true_t
-            if torch.is_tensor(y_pred_t) and torch.is_tensor(y_true_t):
-                if y_pred_t.shape[0] != y_true_t.shape[0]:
-                    y_pred_t = y_pred_t[:y_true_t.shape[0]]
-
-            return self.base_loss(y_pred_t, y_true_t)
-        except Exception:
-            return self.base_loss(y_pred, y_true)
+class HuberPWGLossRegularized(nn.Module):
+    def __init__(self, alpha=1.0, beta=0.1):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+    
+    def HuberLoss(self, y_true, y_pred, w):
+        delta = torch.abs(y_true - y_pred)
         
-            
+        l = torch.where(delta < self.beta,
+                0.5 * w * delta**2,
+                w * self.beta * (delta - 0.5 * self.beta))
+        
+        return torch.sum(l) / (torch.sum(w)+EPS)
+
+    def forward(self, y_pred, y_true, iw, pi, gw, gender):
+        w  = (iw * pi * gw).view(-1)
+        g  = gender.view(-1)
+        mask_f = g == 0.0
+        mask_m = g == 1.0
+        
+        err_f = self.HuberLoss(y_true[mask_f], y_pred[mask_f], w[mask_f])
+        err_m = self.HuberLoss(y_true[mask_m], y_pred[mask_m], w[mask_m])
+        return (err_f + err_m) / 2 + self.alpha * torch.sqrt(torch.square(err_f - err_m) + EPS)
+
+    
 class PWGLoss(nn.Module):
     def __init__(self):
         super().__init__()
@@ -136,7 +139,8 @@ def build_loss_fn(cfg_method):
 LOSS_MAPPING = {
     "MSE": nn.MSELoss,
     "BCE": nn.BCELoss,
-    "SL1":nn.SmoothL1Loss,
+    "SL1":lambda **kwargs: nn.SmoothL1Loss(beta=0.1, **kwargs),
     "nMSE": WeightedMSELoss,
     "nLiteMSE": WeightedLiteMSELoss,
-    "PWGLoss": PWGLoss}
+    "PWGLoss": PWGLoss,
+    "HuberPWGLossRegularized": HuberPWGLossRegularized}

@@ -25,9 +25,9 @@ domain_adaptation_training:
 
 probing_training:
   run_execution: False
-  loss_name: "SL1"
+  loss_name: "HuberPWGLossRegularized"
   learning_rate: 1.0e-3
-  num_epoch: 1
+  num_epoch: 15
   augmentation: True
   method_FT: "probing_training"
   loader_factory: "get_challenge_train_loader"
@@ -35,12 +35,12 @@ probing_training:
   val_split: "val_samp"
   method_kwargs:
     probing_type: "mlp_probing"
-    hidden_size: 512
+    hidden_size: 768
     num_classes: 1
 
 adversarial_probing_training:
   run_execution: True
-  loss_name : "SL1"
+  loss_name : "HuberPWGLossRegularized"
   loss_name_1: "BCE"
   learning_rate: 3.0e-4
   num_epoch: 15
