@@ -1,4 +1,4 @@
-model: 'beit3_base_patch16_224'
+model: 'vit_base_patch16_dinov3.lvd1689m'
 globaux:
   SEED : 42
   N_SAMPLE : 5000
@@ -7,25 +7,9 @@ globaux:
   PATIENCE : 5
   BATCH_SIZE : 32
   
-domain_adaptation_training:
-  run_execution: False
-  loss_name: "BCE"
-  learning_rate: 5.0e-5
-  num_epoch: 7
-  augmentation: True
-  method_FT: "domain_adaptation"
-  loader_factory: "get_celeba_train_loader"
-  val_loader_factory: "get_celeba_val_loader"
-  val_loader_challenge: "get_challenge_val_loader"
-  val_split: "val_samp"
-  method_kwargs:
-    rank: 8
-    alpha: 16
-    dropout: 0.2
-
 probing_training:
   run_execution: True
-  loss_name: "nMSE"
+  loss_name: "PWGLoss"
   learning_rate: 1.0e-3
   num_epoch: 12
   augmentation: True
@@ -42,7 +26,7 @@ probing_training:
 
 lora_training:
   run_execution: True
-  loss_name: "nMSE"
+  loss_name: "PWGLoss"
   learning_rate: 2.0e-4
   num_epoch: 20
   augmentation: True
@@ -55,5 +39,18 @@ lora_training:
     alpha: 16
     dropout: 0.2
 
-
-
+domain_adaptation_training:
+  run_execution: False
+  loss_name: "BCE"
+  learning_rate: 5.0e-5
+  num_epoch: 7
+  augmentation: True
+  method_FT: "domain_adaptation"
+  loader_factory: "get_celeba_train_loader"
+  val_loader_factory: "get_celeba_val_loader"
+  val_loader_challenge: "get_challenge_val_loader"
+  val_split: "val_samp"
+  method_kwargs:
+    rank: 8
+    alpha: 16
+    dropout: 0.2

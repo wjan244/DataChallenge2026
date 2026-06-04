@@ -82,7 +82,6 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     # initialisation early stopping
     patience_counter = 0
     # initialize tracking variables
-    global_step = 0
     best_score = float('inf')
     
     train_start = time.time()
@@ -150,6 +149,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
                     iw_val = batch[4].float().unsqueeze(1).to(DEVICE)
                     pi_val = batch[5].float().unsqueeze(1).to(DEVICE)
                     gw_val = batch[6].float().unsqueeze(1).to(DEVICE)
+
                 elif isinstance(batch, (list, tuple)) and len(batch) == 2:
                     X_val = batch[0].to(DEVICE)
                     y_val = batch[1].float().to(DEVICE).view(-1, 1)
@@ -187,25 +187,17 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         val_err_f = val_err_f.item()
         val_err_m = val_err_m.item()
 
-        mlflow.log_metric("lr", optimizer.param_groups[0]["lr"], step=global_step)
-        mlflow.log_metric("train_loss", final_loss, step=global_step)
-        mlflow.log_metric("val_loss", val_loss, step=global_step)
-        mlflow.log_metric("val_score", val_score, step=global_step)
-        mlflow.log_metric("val_err_female", val_err_f, step=global_step)
-        mlflow.log_metric("val_err_male", val_err_m, step=global_step)
-        mlflow.log_metric("epoch_time_s", time.time() - epoch_start, step=global_step)
-        global_step += 1
-
-        scheduler.step()
-
-        # enregistrement des métriques sur MLflow
-        mlflow.log_metric(key="lr", value=scheduler.get_last_lr()[0], step=n)
+        mlflow.log_metric("lr", optimizer.param_groups[0]["lr"],step=n)
+        mlflow.log_metric("val_score", val_score,step=n)
+        mlflow.log_metric("val_err_female", val_err_f,step=n)
+        mlflow.log_metric("val_err_male", val_err_m,step=n)
         mlflow.log_metric(key="train_loss", value=final_loss, step=n)
         mlflow.log_metric(key="val_loss", value=final_val_loss, step=n)
 
         # log the time to run the epoch
         epoch_time = time.time() - epoch_start
         mlflow.log_metric("epoch_time_s", epoch_time, step=n)
+        
         # update du scheduler
         scheduler.step()
 
