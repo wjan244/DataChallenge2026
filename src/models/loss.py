@@ -58,6 +58,33 @@ class PWGLossRegularized(nn.Module):
         return (err_f + err_m) / 2 + self.alpha * torch.sqrt(torch.square(err_f - err_m) + EPS)
 
 
+class HuberPWGLossRegularized(nn.Module):
+    def __init__(self, alpha=1.0, beta=0.1):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+    
+    def HuberLoss(self, y_true, y_pred, w):
+        delta = torch.abs(y_true - y_pred)
+        
+        l = torch.where(delta < self.beta,
+                0.5 * w * delta**2,
+                w * self.beta * (delta - 0.5 * self.beta))
+        
+        return torch.sum(l) / (torch.sum(w)+EPS)
+        
+        
+
+    def forward(self, y_pred, y_true, iw, pi, gw, gender):
+        w  = (iw * pi * gw).view(-1)
+        g  = gender.view(-1)
+        mask_f = g == 0.0
+        mask_m = g == 1.0
+        
+        err_f = self.HuberLoss(y_true[mask_f], y_pred[mask_f], w[mask_f])
+        err_m = self.HuberLoss(y_true[mask_m], y_pred[mask_m], w[mask_m])
+        return (err_f + err_m) / 2 + self.alpha * torch.sqrt(torch.square(err_f - err_m) + EPS)
+
     
 class UniversalLossWrapper(nn.Module):
     def __init__(self, base_loss):
@@ -65,7 +92,7 @@ class UniversalLossWrapper(nn.Module):
         self.base_loss = base_loss
 
     def forward(self, y_pred, y_true, iw=None, w_pdf=None, gw=None, gender=None):
-        if isinstance(self.base_loss, (PWGLoss, PWGLossRegularized)):
+        if isinstance(self.base_loss, (PWGLoss, PWGLossRegularized,HuberPWGLossRegularized)):
             return self.base_loss(y_pred, y_true, iw, w_pdf, gw, gender)
         if isinstance(self.base_loss, WeightedMSELoss):
             return self.base_loss(y_pred, y_true, iw, w_pdf)
@@ -96,4 +123,5 @@ LOSS_MAPPING = {
     "nLiteMSE": WeightedLiteMSELoss,
     "PWGLoss": PWGLoss,
     "PWGLossRegularized": PWGLossRegularized,
+    "HuberPWGLossRegularized": HuberPWGLossRegularized,
 }

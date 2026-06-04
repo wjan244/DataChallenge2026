@@ -18,7 +18,7 @@ from src.pipeline.evaluation import save_results, run_evaluation
 
 import timm
 
-VALID_LOSS_NAMES = ("nMSE", "nLiteMSE", "PWGLoss", "PWGLossRegularized")
+VALID_LOSS_NAMES = ("nMSE", "nLiteMSE", "PWGLoss", "PWGLossRegularized", "HuberPWGLossRegularized")
 
 
 # ---------------------------------------------------------------------------
