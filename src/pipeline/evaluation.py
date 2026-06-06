@@ -10,7 +10,6 @@ from tqdm import tqdm
 from src.config import*
 from src.metrics import PWScore
 from src.models.models import get_model
-from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, PWGLoss, UniversalLossWrapper
 
 
 def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None, cfg_mod=None, prefix=None, method_kwargs: dict | None = None, index:str=None, save_val_csv: bool = True)->None:

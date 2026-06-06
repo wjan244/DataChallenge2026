@@ -9,67 +9,17 @@ from . import eps
 from src.config import*
 
     
-class WeightedMSELoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, y_pred, y_true, iw, pi):
-        try:
-            combined_weights = iw * pi   
-            numerator = torch.sum(combined_weights * (y_true - y_pred) ** 2) 
-            denominator = torch.sum(combined_weights) 
-        except ValueError:
-            print("coefficients mal définis")
-        
-        return numerator / (denominator + eps)
-
-class WeightedLiteMSELoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, y_pred, y_true, iw):
-        return (iw * (y_pred - y_true) ** 2).mean()
 
 class UniversalLossWrapper(nn.Module):
     def __init__(self, base_loss):
         super().__init__()
         self.base_loss = base_loss
 
-    def forward(self, y_pred, y_true, iw=None, w_pdf=None, gw=None, gender=None):
-        if isinstance(self.base_loss, (PWGLoss,HuberPWGLossRegularized)):
-            return self.base_loss(y_pred, y_true, iw, w_pdf, gw, gender)
-        if isinstance(self.base_loss, WeightedMSELoss):
-            return self.base_loss(y_pred, y_true, iw, w_pdf)
-        if isinstance(self.base_loss, WeightedLiteMSELoss):
-            return self.base_loss(y_pred, y_true, iw)
+    def forward(self, y_pred, y_true, pi=None, gender=None):
         if isinstance(self.base_loss,nn.SmoothL1Loss):
             return self.base_loss(y_pred, y_true)
         if isinstance(self.base_loss, HuberLossRegularized):
-            return self.base_loss(y_pred, y_true, iw, w_pdf)
-
-
-class HuberPWGLossRegularized(nn.Module):
-    def __init__(self, alpha=1.0, beta=0.1):
-        super().__init__()
-        self.alpha = alpha
-        self.beta = beta
-
-    def HuberLoss(self, y_true, y_pred, w):
-        delta = torch.abs(y_true - y_pred)
-        l = torch.where(delta < self.beta,
-                0.5 * w * delta**2,
-                w * self.beta * (delta - 0.5 * self.beta))
-        return torch.sum(l) / (torch.sum(w)+eps)
-
-    def forward(self, y_pred, y_true, iw, pi, gw, gender):
-        w  = (iw * pi * gw).view(-1)
-        g  = gender.view(-1)
-        mask_f = g == 0.0
-        mask_m = g == 1.0
-        
-        err_f = self.HuberLoss(y_true[mask_f], y_pred[mask_f], w[mask_f])
-        err_m = self.HuberLoss(y_true[mask_m], y_pred[mask_m], w[mask_m])
-        return (err_f + err_m) / 2 + self.alpha * torch.sqrt(torch.square(err_f - err_m) + eps)
+            return self.base_loss(y_pred, y_true, pi, gender)
 
 
 class HuberLossRegularized(nn.Module):
@@ -163,14 +113,6 @@ class HuberLossRegularized(nn.Module):
         return loss_fairness
     
 
-class PWGLoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, y_pred, y_true, iw, pi, gw, gender):
-        combined_weights = iw * pi * gw
-        return torch.sum(combined_weights * (y_true - y_pred) ** 2) / (torch.sum(combined_weights)+eps)
-    
 def build_loss_fn(loss_descriptor):
     """Build a loss module from either a config dict or a direct loss name string.
 
@@ -211,8 +153,4 @@ def build_loss_fn(loss_descriptor):
 LOSS_MAPPING = {
     "MSE": nn.MSELoss,
     "BCE": nn.BCELoss,
-    "nMSE": WeightedMSELoss,
-    "nLiteMSE": WeightedLiteMSELoss,
-    "PWGLoss": PWGLoss,
-    "HuberPWGLossRegularized": HuberPWGLossRegularized,
     "HuberLossRegularized":HuberLossRegularized}
