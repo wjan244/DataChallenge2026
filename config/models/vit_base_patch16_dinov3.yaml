@@ -7,6 +7,7 @@ probing_training:
   num_epoch: 15
   method_FT: "probing_training"
   method_kwargs:
+    num_classes: 1
     probing_type: "mlp_probing"
     hidden_size: 512
 

@@ -1,5 +1,3 @@
-model                 : 'vit_tiny_patch16_224'
-
 globaux:
   SEED                : 42
   N_SAMPLE            : 65000

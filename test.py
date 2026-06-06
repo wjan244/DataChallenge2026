@@ -61,7 +61,7 @@ evaluation.run_evaluation = patched_run_evaluation
 from main import main
 from src.config import CONFIG_MODELS
 
-ORIGINAL_YAML = CONFIG_MODELS / 'vit_tiny_patch16_224.yaml'
+ORIGINAL_YAML = CONFIG_MODELS / 'vit_base_patch16_dinov3.yaml'
 TEMP_FILENAME = 'vit_tiny_patch16_224_debug.yaml'
 TEMP_YAML_PATH = CONFIG_MODELS / TEMP_FILENAME
 

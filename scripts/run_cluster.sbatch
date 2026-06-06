@@ -29,7 +29,7 @@
 # tail -f logs/ 840702.log
 # squeue -j 837419
 # squeue -p 836898
-# cat logs/840700.log
+# cat logs/842971.log
 
 # rsync -vr DataChallenge2026.zip name@xxx:/home/infres/cmergny-25/DataChallenge2026/data
 
