@@ -22,8 +22,9 @@ DataLoader.__iter__ = patched_iter
 # =====================================================================
 # 2. PATCH EVALUATION (Correction de cfg_mod + arguments)
 # =====================================================================
-# import via package path to work when the script is executed directly
-from src.pipeline import evaluation
+# import evaluation module dynamically to avoid executing package __init__ side-effects
+import importlib
+evaluation = importlib.import_module("src.pipeline.evaluation")
 
 _original_run_evaluation = evaluation.run_evaluation
 

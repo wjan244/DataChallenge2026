@@ -33,7 +33,17 @@ class LoRALinear(nn.Module):
         # création des matrices A/B (couches linéaires)
         self.lora_a = nn.Linear(in_dim, rank, bias=False)
         self.lora_b = nn.Linear(rank, out_dim, bias=False)
-        
+        # déplacer sur device/dtype si fourni (éviter de passer None à torch.empty)
+        if (device is not None) or (dtype is not None):
+            try:
+                self.lora_a = self.lora_a.to(device=device, dtype=dtype)
+            except Exception:
+                pass
+            try:
+                self.lora_b = self.lora_b.to(device=device, dtype=dtype)
+            except Exception:
+                pass
+
         # initialisation des biais
         nn.init.kaiming_uniform_(self.lora_a.weight, a=math.sqrt(5)) # Initialisation standard pour A
         nn.init.zeros_(self.lora_b.weight)                           # Initialisation stricte à 0 pour B afin de garantir la neutralité au départ

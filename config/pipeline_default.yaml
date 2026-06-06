@@ -1,80 +1,26 @@
+model                 : 'vit_tiny_patch16_224'
+
 globaux:
-  SEED : 42
-  N_SAMPLE : 5000
-  N_BINS : 20
-  NUM_CLASSES : 1
-  PATIENCE : 5
-  BATCH_SIZE : 32
-  ALPHA_SMOOTH : 50
-  N_BINS_GENDER : 30
-  ALPHA_SMOOTH : 50
-  EPS : 1e-8
-  
-domain_adaptation_training:
-  run_execution: False
-  loss_name: "BCE"
-  learning_rate: 5.0e-5
-  num_epoch: 1
-  augmentation: True
-  method_FT: "domain_adaptation"
-  loader_factory: "get_celeba_train_loader"
-  val_loader_factory: "get_celeba_val_loader"
-  val_loader_challenge: "get_challenge_val_loader"
-  val_split: "val_samp"
-  method_kwargs:
-    rank: 8
-    alpha: 16
-    dropout: 0.2
-    num_classes: 1
+  SEED                : 42
+  N_SAMPLE            : 65000
+  N_BINS              : 20
+  NUM_CLASSES         : 1
+  PATIENCE            : 5
+  BATCH_SIZE          : 32
+  EPS                 : 1e-8
 
-probing_training:
-  run_execution: True
-  loss_name: "SL1"
-  learning_rate: 1.0e-3
-  num_epoch: 1
-  augmentation: True
-  method_FT: "probing_training"
-  loader_factory: "get_challenge_train_loader"
-  val_loader_factory: "get_challenge_val_loader"
-  val_split: "val_samp"
-  method_kwargs:
-    probing_type: "mlp_probing"
-    hidden_size: 512
-    num_classes: 1
+loader:
+  val_split           : "val_samp"
+  train_loader_factory: "get_challenge_train_loader"
+  val_loader_factory  : "get_challenge_val_loader"
 
-adversarial_probing_training:
-  run_execution: True
-  loss_name_1: "BCE"
-  loss_name_2: "nMSE"
-  learning_rate: 1.0e-3
-  num_epoch: 1
-  augmentation: True
-  method_FT: "reversial_probing_training"
-  loader_factory: "get_challenge_train_loader"
-  val_loader_factory: "get_challenge_val_loader"
-  val_split: "val_samp"
-  method_kwargs:
-    probing_type: "reversial_probing"
-    hidden_size: 512
-    num_head : 2
-    num_classes: 2
-    lambda: 1
+augmentation:
+  status              : True
+  warm_start          : 0
+  warm_stop           : 12
+  augmentation_factor : 3
 
-lora_training:
-  run_execution: True
-  loss_name: "SL1"
-  learning_rate: 2.0e-4
-  num_epoch: 1
-  augmentation: True
-  "method_FT": "lora_training"
-  loader_factory: "get_challenge_train_loader"
-  val_loader_factory: "get_challenge_val_loader"
-  val_split: "val_samp"
-  method_kwargs:
-    rank: 8
-    alpha: 16
-    dropout: 0.2
-    num_classes: 1
+
 
 
 

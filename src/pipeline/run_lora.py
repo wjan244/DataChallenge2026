@@ -8,10 +8,11 @@ from src.pipeline.train import run_train
 
 
 def run_lora(cfg, timestamp, experiment_id, precedent_run_id=None, precedent_method=None):
-    cfg_mod = cfg["model"]
-    cfg_glob = cfg["globaux"]
-    cfg_method = cfg["lora_training"]
-    loss_name = cfg_method.get("loss_name")
+    cfg_mod         = cfg["model"]
+    cfg_glob        = cfg["globaux"]
+    cfg_method      = cfg["lora_training"]
+    cfg_loader      = cfg["loader"]
+    loss_name       = cfg_method.get("loss_name")
 
     if cfg_method["run_execution"]==True:
         print(f"début d'entrainement par {cfg_method['method_FT']}")

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from . import df_train_raw,df_test_raw,N_BINS,N_SAMPLE,eps
 from scipy.stats import entropy
 from sklearn.model_selection import train_test_split
 from PIL import Image
@@ -8,54 +9,38 @@ from src.config import*
 from src.config_utils import load_config
 from src.data.data_stats import distribution_adaptation_reweight, get_test_distribution_from_screenshot
 
-
-cfg_glob = load_config(CONFIG_DEFAULT).get("globaux", {})
-N_BINS = cfg_glob.get("N_BINS", 20)
-N_SAMPLE = cfg_glob.get("N_SAMPLES")
-
 bins = np.linspace(0, 1, N_BINS + 1)
 bin_center = (bins[:-1] + bins[1:]) / 2
-eps = cfg_glob.get("EPS", 1e-8)
-
-df_train_raw = pd.read_csv(CSV_DIR / "train.csv", delimiter=',')
-df_test_raw = pd.read_csv(CSV_DIR / "test_students.csv", delimiter=',')
-
 
 def get_challenge_split(screenshot_path=SCREENSHOT_PATH):
     """
-    Pipeline principal : Nettoie les données, effectue le split train/validation 
-    et adapte les distributions via la méthode de tracé par capture d'écran.
+    nettoie les données, effectue le split train/validation 
+    et adapte les distributions.
     """
     df_train_clean = df_train_raw.dropna()
     df_test = df_test_raw.dropna().reset_index(drop=True)
-
-    # extraction de la vraie distribution depuis l'image
-    test_dist = get_test_distribution_from_screenshot(screenshot_path)
     
     # split initial stratifié de manière aléatoire (80% Train, 20% Eval)
     df_train, df_val = train_test_split(df_train_clean, test_size=0.2, random_state=42, shuffle=True)
     df_train = df_train.reset_index(drop=True)
     df_val_raw = df_val.reset_index(drop=True).copy()
 
-    n = len(df_train) if screenshot_path else N_SAMPLE
-    n_val = len(df_val) if screenshot_path else 5000
-    
+    n_val = int((0.2*N_SAMPLE))
+
     # application de l'adaptation de domaine sur le train et la validation
-    df_train_reweight, _, _ = distribution_adaptation_reweight(n_sample=n, df=df_train, test_distribution=test_dist)
-    df_val_reweight, _, _ = distribution_adaptation_reweight(n_sample=n_val, df=df_val, test_distribution=test_dist)
+    df_train_reweight, _, _ = distribution_adaptation_reweight(n_sample=N_SAMPLE, df=df_train, test_distribution=None) # forcer la distribution test en une distribution beta
+    df_val_reweight, _, _ = distribution_adaptation_reweight(n_sample=n_val, df=df_val, test_distribution=None) # forcer la distribution test en une distribution beta
 
     return df_train_reweight, df_val_raw, df_val_reweight, df_test
 
 
-
-
-
 if __name__ == "__main__":
+    # vérification des distributions
     import matplotlib.pyplot as plt
 
     # Génération du split de données adapté via l'image
     df_train_sub, df_val_raw, df_val_samp, df_test = get_challenge_split(screenshot_path=SCREENSHOT_PATH)
-
+    print(f"dimension de train{len(df_train_sub)}")
     # Récupération de la distribution cible de référence
     test_distribution = get_test_distribution_from_screenshot(SCREENSHOT_PATH)
 

@@ -92,36 +92,12 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc="Entraînement",leave=True)
 
         for batch_idx, batch in progress_bar:
-            # Support different dataset batch formats:
-            # - Challenge dataset -> (X, y, gender, filename, iw, pi, gw)
-            # - CelebA dataset -> (X, y)
-            if isinstance(batch, (list, tuple)) and len(batch) >= 7:
-                X = batch[0].to(DEVICE)
-                y = batch[1].float().to(DEVICE).view(-1, 1)
-                gender = batch[2].float().to(DEVICE).view(-1, 1)
-                iw = batch[4].float().unsqueeze(1).to(DEVICE)
-                pi = batch[5].float().unsqueeze(1).to(DEVICE)
-                gw = batch[6].float().unsqueeze(1).to(DEVICE)
-            elif isinstance(batch, (list, tuple)) and len(batch) == 2:
-                X = batch[0].to(DEVICE)
-                y = batch[1].float().to(DEVICE).view(-1, 1)
-                # defaults for missing fields (CelebA has no gender/weights)
-                gender = torch.zeros_like(y, device=DEVICE, dtype=torch.float32)
-                iw = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
-                try:
-                    pi = (1.0 / 30.0 + y).to(device=DEVICE, dtype=torch.float32)
-                except Exception:
-                    pi = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
-                gw = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
-            else:
-                # generic fallback: attempt to unpack minimally
-                X = batch[0].to(DEVICE)
-                y = batch[1].float().to(DEVICE).view(-1, 1)
-                gender = torch.zeros_like(y, device=DEVICE, dtype=torch.float32)
-                iw = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
-                pi = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
-                gw = 0.5 * torch.ones_like(y, device=DEVICE, dtype=torch.float32)
-
+         
+            X = batch[0].to(DEVICE)
+            y = batch[1].float().to(DEVICE).view(-1, 1)
+            gender = batch[2].float().to(DEVICE).view(-1, 1)
+            pi = batch[5].float().unsqueeze(1).to(DEVICE)
+    
             output = model(X)
             # gesion de l'adversarial (output)
             if isinstance(output,dict):
@@ -130,20 +106,11 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
             else:
                 y_pred = output
 
-            loss = loss_fn(y_pred, y, iw, pi, gw, gender)
+            loss = loss_fn(y_pred, y, pi, gender)
             # gesion de l'adversarial (loss)
             if isinstance(output,dict):
                 criterion_fairness = torch.nn.BCELoss()
-                # Ensure adversarial head has same shape as gender target.
-                # If head returns 2-class probabilities ([B,2]), pick positive class.
-                if torch.is_tensor(y_pred_genre) and y_pred_genre.dim() == 2 and y_pred_genre.size(1) == 2:
-                    y_pred_genre = y_pred_genre[:, 1].unsqueeze(1)
-                # Align dtype/device
-                try:
-                    y_pred_genre = y_pred_genre.to(device=gender.device, dtype=gender.dtype)
-                except Exception:
-                    pass
-                loss_fairness = criterion_fairness(y_pred_genre, gender)
+                loss_fairness = criterion_fairness(y_pred_genre,gender)
                 loss = loss + loss_fairness
 
             running_loss += loss.item()
@@ -158,37 +125,17 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
         # boucle d'évaluation
         model.eval()
         val_loss = 0
-        all_preds, all_targets, all_iw, all_pi, all_genders = [], [], [], [], []
+        all_preds, all_targets, all_pi, all_genders = [], [], [], []
         with torch.inference_mode():
             for batch in val_loader:
                 # robust unpack for validation batches (same logic as training)
-                if isinstance(batch, (list, tuple)) and len(batch) >= 7:
-                    X_val = batch[0].to(DEVICE)
-                    y_val = batch[1].float().to(DEVICE).view(-1, 1)
-                    gender_val = batch[2].float().to(DEVICE).view(-1, 1)
-                    iw_val = batch[4].float().unsqueeze(1).to(DEVICE)
-                    pi_val = batch[5].float().unsqueeze(1).to(DEVICE)
-                    gw_val = batch[6].float().unsqueeze(1).to(DEVICE)
-
-                elif isinstance(batch, (list, tuple)) and len(batch) == 2:
-                    X_val = batch[0].to(DEVICE)
-                    y_val = batch[1].float().to(DEVICE).view(-1, 1)
-                    gender_val = torch.zeros_like(y_val, device=DEVICE, dtype=torch.float32)
-                    iw_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
-                    try:
-                        pi_val = (1.0 / 30.0 + y_val).to(device=DEVICE, dtype=torch.float32)
-                    except Exception:
-                        pi_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
-                    gw_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
-                else:
-                    X_val = batch[0].to(DEVICE)
-                    y_val = batch[1].float().to(DEVICE).view(-1, 1)
-                    gender_val = torch.zeros_like(y_val, device=DEVICE, dtype=torch.float32)
-                    iw_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
-                    pi_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
-                    gw_val = 0.5 * torch.ones_like(y_val, device=DEVICE, dtype=torch.float32)
-
+                X_val = batch[0].to(DEVICE)
+                y_val = batch[1].float().to(DEVICE).view(-1, 1)
+                gender_val = batch[2].float().to(DEVICE).view(-1, 1)
+                pi_val = batch[5].float().unsqueeze(1).to(DEVICE)
+                
                 output_val = model(X_val)
+
                 # gestion de l'adversarial pour la validation
                 if isinstance(output_val, dict):
                     y_pred_val = output_val["head_0"]
@@ -196,7 +143,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
                 else:
                     y_pred_val = output_val
 
-                batch_loss_val = loss_fn(y_pred_val, y_val, iw_val, pi_val, gw_val, gender_val)
+                batch_loss_val = loss_fn(y_pred_val, y_val, pi_val, gender_val)
                 
                 # gestion de l'adversarial pour la validation
                 if isinstance(output_val, dict):
@@ -208,7 +155,6 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
 
                 all_preds.append(y_pred_val)
                 all_targets.append(y_val)
-                all_iw.append(iw_val)
                 all_pi.append(pi_val)
                 all_genders.append(gender_val)
                 
@@ -216,8 +162,8 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
 
         val_score, val_err_f, val_err_m = score_fn(
             torch.cat(all_preds), torch.cat(all_targets),
-            torch.cat(all_iw), torch.cat(all_pi), torch.cat(all_genders)
-        )
+            torch.cat(all_pi), torch.cat(all_genders))
+        
         val_score = val_score.item()
         val_err_f = val_err_f.item()
         val_err_m = val_err_m.item()

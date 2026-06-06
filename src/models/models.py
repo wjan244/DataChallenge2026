@@ -4,21 +4,13 @@ import timm
 import mlflow
 import torch
 from torch import nn
-from torchinfo import summary
 
-from src.config import DEVICE
-from src.models.utils_setup_method import setup_domain_adaptation, setup_probing, setup_lora_finetuning,setup_adversarial_probing
+from . import METHOD_MAPPING
 from src.models.utils_lora import inject_lora_transformer
-
-# Wrapper de méthodes d'adaptation
-METHOD_MAPPING = {"domain_adaptation":setup_domain_adaptation,
-                  "probing_training": setup_probing,
-                  "reversial_probing_training": setup_adversarial_probing,
-                  "lora_training": setup_lora_finetuning} 
 
 class OcclusionModel(nn.Module):
     """
-    - instancie le modèle défini dans config.py
+    - instancie le modèle
     - ajoute une sigmoïde en sortie de du modèle
     """
     def __init__(self,model:nn.Module)->None:
@@ -28,35 +20,26 @@ class OcclusionModel(nn.Module):
 
     def forward(self,x:torch.Tensor)->torch.Tensor:
         out = self.model(x)
-        # some setup methods (adversarial probing) return a dict of heads
         if isinstance(out, dict):
-            # apply sigmoid to each tensor head and return a dict with same keys
+            # gestion du cas multi-têtes
             return {k: self.sigmoide(v) for k, v in out.items()}
         return self.sigmoide(out)
     
+
 def get_model(timestamp, cfg_mod=None, cfg_method=None, precedent_run_id=None, precedent_method=None,
               method: str | None = None, load_checkpoint: bool = False, checkpoint_path: str | None = None,
-              stage: str | None = None, num_classes: int | None = None, model_name: str | None = None, **method_kwargs) -> nn.Module:
-    """instancier le modèle défini dans config.py et lui affecter une méthode de FineTuning:
-    - Linear_probing
-    - LoRA
+              num_classes: int | None = None, **method_kwargs) -> nn.Module:
+    """instancier le modèle défini et lui affecter une méthode de FineTuning avec les bons poids
     """
-    if num_classes is None:
-        num_classes = 1
-    # récupérer la méthode depuis cfg_method si fourni, sinon garder le param `method`
-    if cfg_method is not None:
-        # use get to avoid KeyError and preserve explicit `method` if passed
+
+    # récupérer la méthode depuis cfg_method si fourni (exp:"reversal_probing","lora_training"...)
+    if cfg_method and hasattr(cfg_method, 'get'):
         method = cfg_method.get("method_FT", method)
-    
     # récupérer le modèle
     model = timm.create_model(cfg_mod,pretrained=True,num_classes=num_classes)
 
     # insertion de la méthode
-        # valider la méthode
-    if method is not None and method not in METHOD_MAPPING:
-        raise ValueError(f"Unknown method: {method}")
-
-    # extraction des poids précédents si entrainement avec méthodes séquentielles
+        # extraction des poids précédents si entrainement avec méthodes séquentielles
     weights = None
     if precedent_run_id:
         precedent_tag = f"{cfg_mod}_{precedent_method}"
@@ -77,7 +60,7 @@ def get_model(timestamp, cfg_mod=None, cfg_method=None, precedent_run_id=None, p
         # Injecter de la méthode de finetuning suivante
     if method is not None:
         # ajout de LoRA (passé une seule fois dans get_model si la méthode l'exige)
-        if method in ("domain_adaptation", "lora_training"):
+        if method in ("domain_adaptation", "lora_training", "reversal_probing"):
             inj_kwargs = {k: method_kwargs[k] for k in ("rank", "alpha", "dropout") if k in (method_kwargs or {})}
             model = inject_lora_transformer(model, **inj_kwargs)
         # ajout de la méthode de fine tune en cours (contrôle de poids freezé/défreezés)
@@ -87,23 +70,22 @@ def get_model(timestamp, cfg_mod=None, cfg_method=None, precedent_run_id=None, p
     model = OcclusionModel(model)
     return model
 
-
 if __name__ == "__main__":
     from src.config_utils import load_config    
-    cfg = load_config("vit_tiny_patch16_224.yaml")
-    cfg_method = cfg.get("method_kwargs") or {}
-    cfg_method_kwargs = cfg_method.get("method_kwargs") or {}
-    # On teste en passant le dictionnaire d'hyperparamètres du YAML via **
+    from torchinfo import summary
+
+    cfg = load_config("vit_base_patch16_dinov3.yaml")
+    addversarial_section = cfg.get("probing_training")
+    cfg_kwargs = addversarial_section.get("method_kwargs") or {}
 
     model = get_model(
         timestamp=None,
-        cfg_mod=cfg["model"],
-        model_name=cfg["model"], 
-        cfg_method=cfg["reversial_probing_training"],
+        cfg_mod=cfg["model"], 
+        cfg_method=addversarial_section,
         precedent_run_id=None,
         precedent_method=None,
-        method="multi_probing_training",
-        **cfg_method_kwargs
-    )
+        method="probing_training",
+        **cfg_kwargs)
     
     summary(model)
+   

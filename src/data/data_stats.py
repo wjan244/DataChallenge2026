@@ -1,19 +1,14 @@
 import numpy as np
 import pandas as pd
 
+from . import N_BINS,N_BINS_GENDER,ALPHA_SMOOTH,eps
 from PIL import Image
 from scipy.stats import beta
 from src.config import*
-from src.config_utils import load_config
 
-cfg_glob = load_config(CONFIG_DEFAULT).get("globaux", {})
-N_BINS = cfg_glob.get("N_BINS", 20)
-N_BINS_GENDER = cfg_glob.get("N_BINS_GENDER", 30)
-ALPHA_SMOOTH = cfg_glob.get("ALPHA_SMOOTH", 50)
 
 bins = np.linspace(0, 1, N_BINS + 1)
 bin_center = (bins[:-1] + bins[1:]) / 2
-eps = 1e-6
 
 BINS = torch.linspace(0, 1, steps=31, dtype=torch.float64)
 
@@ -47,13 +42,13 @@ def distribution_adaptation_reweight(n_sample, df, test_distribution):
     """ Adaptation basée sur la distribution estimée par screenshot (Reweighting) """
 
     df_distribution, _ = np.histogram(df["FaceOcclusion"], bins=N_BINS, density=True) 
-    df_distribution = (df_distribution + eps) / (np.sum(df_distribution) + eps)
+    df_distribution = (df_distribution+eps) / (np.sum(df_distribution) + eps)
 
     if test_distribution is None:
         test_distribution = beta.pdf(bin_center, a=1.5, b=5) + eps
         test_distribution = test_distribution / (np.sum(test_distribution) + eps)
 
-    ratio_KL = test_distribution / (df_distribution + 1e-6)
+    ratio_KL = test_distribution / (df_distribution)
     bin_categorie = pd.cut(df["FaceOcclusion"], bins=bins, include_lowest=True, ordered=True, labels=False)
     df['D_KL'] = ratio_KL[bin_categorie]
 

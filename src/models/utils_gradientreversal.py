@@ -18,13 +18,14 @@ class GradientReversal(Function):
             grad_input = - alpha*grad_output
         return grad_input, None
 
+
 revgrad = GradientReversal.apply
+
 
 class GradientReversal(nn.Module):
     def __init__(self, alpha):
         super().__init__()
         self.alpha = torch.tensor(alpha, requires_grad=False)
-
     def forward(self, x):
         return revgrad(x, self.alpha)
 
@@ -59,7 +60,6 @@ def inject_adversarial_probing(model:torch.nn.Module, **method_kwargs)->torch.nn
     container.grl = GradientReversal(alpha=alpha_grl)
 
     # gestion des têtes
-    
     multiple_new_head = torch.nn.ModuleDict()
         # mettre une couche linéaire par défaut
     for i in range(num_head):
@@ -68,7 +68,7 @@ def inject_adversarial_probing(model:torch.nn.Module, **method_kwargs)->torch.nn
                                                                     torch.nn.Linear(hidden_size, out_features))
     setattr(container, head_attr, multiple_new_head)
 
-    old_forward = container.forward         # prédiction de l'ancienne tête
+    old_forward = container.forward                         # prédiction de l'ancienne tête
 
     # aiguiller les entrées vers toutes les têtes
     def _switch_forward(*args, **kwargs):
@@ -78,11 +78,11 @@ def inject_adversarial_probing(model:torch.nn.Module, **method_kwargs)->torch.nn
         features = old_forward(*args, **kwargs)             # capter les features de l'ancienne tête
         setattr(container,head_attr,multiple_new_head)      # instancier la nouvelle tête avec toutes les têtes créées
         
-        output = {}                         # attribuer les features à chaque tête
+        output = {}                                          # attribuer les features à chaque tête
         for i in range(num_head):
-            cle = f"{head_attr}_{i}"        # nom de la tête
-            head_layer = multiple_new_head[cle]   # tête
-            if i==1:                        # appliquer le GRL à la première tête
+            cle = f"{head_attr}_{i}"                        # nom de la tête
+            head_layer = multiple_new_head[cle]             # tête
+            if i==1:                                        # appliquer le GRL à la première tête
                 features_head = container.grl(features)
             else:
                 features_head = features
@@ -90,6 +90,6 @@ def inject_adversarial_probing(model:torch.nn.Module, **method_kwargs)->torch.nn
             output[cle] = head_layer(features_head)
         return output
 
-    container.forward = _switch_forward   # récupérer l'output des nouvelles têtes
+    container.forward = _switch_forward                     # récupérer l'output des nouvelles têtes
 
     return model

@@ -66,3 +66,4 @@ echo "timestamp: $(date -Is)"
 # sacct --format=JobId,Node,MaxRSS,AveCPU,State -u wjan-25 --state=RUNNING,PENDING -> voir tous les jobs actifs
 # sacct -u wjan-25 --format="JobID,JobName,NodeList,Elapsed,State"
 # squeue --state=PENDING
+# squeue --state=RUNNING

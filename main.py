@@ -24,8 +24,8 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(SEED)
 
 def main(file_name):
-    cfg = load_config(file_name)
-
+    cfg         = load_config(file_name)
+    
     dagshub.init(repo_owner='wjan244', repo_name='DataChallenge2026', mlflow=True)
     experiment_name = "DataChallenge_2026"
     experiment = mlflow.set_experiment(experiment_name=experiment_name)
@@ -33,8 +33,8 @@ def main(file_name):
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    run_id, method = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
-    run_id, method = run_probing(cfg,timestamp,experiment_id,precedent_run_id=run_id,precedent_method=method)
+    #run_id, method = run_domain_adaptation(cfg,file_name,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
+    run_id, method = run_probing(cfg,timestamp,experiment_id,precedent_run_id=None,precedent_method=None)
     run_id, method = run_lora(cfg, timestamp, experiment_id, precedent_run_id=run_id, precedent_method=method)
     run_id, method = run_adversarial_probing(cfg, timestamp, experiment_id, precedent_run_id=run_id, precedent_method=method)
 

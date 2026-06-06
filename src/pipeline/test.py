@@ -8,6 +8,37 @@ from src.config import*
 from src.models.models import get_model
 
 
+def _per_sample_aggregate(x):
+    """Return a 1-D tensor with one value per batch sample.
+    If x has shape [B, T, ...] it collapses non-batch dims by mean.
+    If x is scalar-like, returns flattened tensor of length B.
+    """
+    if torch.is_tensor(x):
+        if x.dim() > 1:
+            return x.view(x.size(0), -1).mean(dim=1)
+        return x.view(-1)
+    # fallback: convert to tensor then process
+    t = torch.tensor(x)
+    if t.dim() > 1:
+        return t.view(t.size(0), -1).mean(dim=1)
+    return t.view(-1)
+
+
+def _to_scalar(v):
+    """Convert a value (tensor or python) to a float safely.
+    If tensor has multiple elements, takes the mean.
+    """
+    if torch.is_tensor(v):
+        v = v.detach().cpu()
+        if v.numel() == 1:
+            return float(v.item())
+        return float(v.view(-1).float().mean().item())
+    try:
+        return float(v)
+    except Exception:
+        return float(torch.tensor(v).float().mean().item())
+
+
 def save_split_predictions(timestamp, loader, split_name, method_FT, cfg_mod, method_kwargs=None):
     """Run inference on a labeled split; save filename/FaceOcclusion(GT)/pred/gender/iw to CSV."""
     model_tag = f"{cfg_mod}_{method_FT}"
@@ -31,21 +62,24 @@ def save_split_predictions(timestamp, loader, split_name, method_FT, cfg_mod, me
 
             outputs_split = model(X)
             if isinstance(outputs_split, dict):
-                y_pred = outputs_split["head_0"].view(-1)
+                y_pred = outputs_split["head_0"]
             else:
-                y_pred = outputs_split.view(-1)
+                y_pred = outputs_split
 
-            y_true = batch[1].view(-1)
-            genders = batch[2]
+            # ensure one scalar per sample
+            y_pred = _per_sample_aggregate(y_pred)
+            y_true = _per_sample_aggregate(batch[1])
+            genders = _per_sample_aggregate(batch[2])
             filenames = batch[3]
-            iws = batch[4]
+            iws = _per_sample_aggregate(batch[4]) if len(batch) > 4 else None
+
             for i in range(len(X)):
                 results_list.append({
                     'filename': filenames[i],
-                    'FaceOcclusion': float(y_true[i]),
-                    'pred': float(y_pred[i]),
-                    'gender': float(genders[i]),
-                    'iw': float(iws[i]),
+                    'FaceOcclusion': _to_scalar(y_true[i]),
+                    'pred': _to_scalar(y_pred[i]),
+                    'gender': _to_scalar(genders[i]),
+                    'iw': _to_scalar(iws[i]) if iws is not None else None,
                 })
 
     results_df = pd.DataFrame(results_list)
@@ -91,12 +125,13 @@ def run_test(timestamp,cfg_glob,test_loader,method_FT,cfg_mod, method_kwargs: di
             else:
                 y_pred = outputs_test
 
-            for i in range(len(X)):
+            y_pred = _per_sample_aggregate(y_pred)
 
+            for i in range(len(X)):
                 results_list.append({'filename': filename[i],
-                                    'FaceOcclusion': float(y_pred[i]),
-                                    'gender' : 'x'
-                                    })          
+                                     'FaceOcclusion': _to_scalar(y_pred[i]),
+                                     'gender' : 'x'
+                                     })
     results_df = pd.DataFrame(results_list)
 
     # sauvegarde

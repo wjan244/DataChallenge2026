@@ -8,18 +8,21 @@ from src.pipeline.train import run_train
 
 
 def run_domain_adaptation(cfg, file_name, timestamp, experiment_id, precedent_run_id=None, precedent_method=None):
-    cfg_mod = cfg["model"]
-    cfg_glob = cfg["globaux"]
-    cfg_method = cfg["domain_adaptation_training"]
-    loss_name = cfg_method.get("loss_name")
+    cfg_mod         = cfg.get("model")
+    cfg_loader      = cfg.get("loader")
+    cfg_glob        = cfg.get("globaux", {})
+    cfg_method      = cfg.get("domain_adaptation_training", {})
+    loss_name       = cfg_method.get("loss_name")
 
-    if cfg_method["run_execution"]==True:
+    # if the method section is missing or run_execution is not True, skip
+    if not cfg_method or cfg_method.get("run_execution") is not True:
+        return precedent_run_id, precedent_method
 
-        print(f"début d'entrainement par {cfg_method['method_FT']}")
-        with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_domain adaptation") as run:
+    print(f"début d'entrainement par {cfg_method.get('method_FT')}")
+    with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_domain adaptation") as run:
             print(f"MLflow run: {mlflow.get_tracking_uri()}/#/experiments/{experiment_id}/runs/{run.info.run_id}")
-            get_celeba_train_loader = globals()[cfg_method["loader_factory"]]
-            get_celeba_val_loader = globals()[cfg_method["val_loader_factory"]]
+            get_celeba_train_loader = globals()[cfg_loader["train_loader_factory"]]
+            get_celeba_val_loader = globals()[cfg_loader["val_loader_factory"]]
             get_challenge_val_loader = globals()[cfg_method["val_loader_challenge"]]
 
 
@@ -43,7 +46,32 @@ def run_domain_adaptation(cfg, file_name, timestamp, experiment_id, precedent_ru
             run_evaluation(timestamp=timestamp, cfg_glob=cfg_glob, val_loader=val_loader, method_FT=return_method, loss_name=loss_name, cfg_mod=cfg_mod, prefix="score sur Celeba", method_kwargs=cfg_method.get("method_kwargs"), index="CeleBa_evaluation")
             run_evaluation(timestamp=timestamp, cfg_glob=cfg_glob, val_loader=challenge_val_loader, method_FT=return_method, loss_name=loss_name, cfg_mod=cfg_mod, prefix="score sur Dataset Challenge", method_kwargs=cfg_method.get("method_kwargs"), index="Challenge_evaluation")
 
-            print(f"fin d'entrainement par {cfg_method['method_FT']}")
-            return run_id, return_method
-    else:
-        return precedent_run_id, precedent_method
+            print(f"début d'entrainement par {cfg_method.get('method_FT')}")
+            with mlflow.start_run(experiment_id=experiment_id, run_name=f"{timestamp}_{cfg_mod}_domain adaptation") as run:
+                print(f"MLflow run: {mlflow.get_tracking_uri()}/#/experiments/{experiment_id}/runs/{run.info.run_id}")
+                get_celeba_train_loader = globals()[cfg_method["loader_factory"]]
+                get_celeba_val_loader = globals()[cfg_method["val_loader_factory"]]
+                get_challenge_val_loader = globals()[cfg_method["val_loader_challenge"]]
+
+
+                train_loader = get_celeba_train_loader(batch_size=cfg_glob["BATCH_SIZE"],
+                                                       num_workers=NUM_WORKERS, model_name=cfg_mod,
+                                                       augmentation=cfg_method.get("augmentation"))
+
+                val_loader = get_celeba_val_loader(batch_size=cfg_glob["BATCH_SIZE"],
+                                                   num_workers=NUM_WORKERS, model_name=cfg_mod)
+
+                # obtenir le DataLoader du dataset Challenge (ne pas unpacker un DataLoader)
+                challenge_val_loader = get_challenge_val_loader(split=cfg_method["val_split"],
+                                                                batch_size=cfg_glob["BATCH_SIZE"],
+                                                                num_workers=NUM_WORKERS, model_name=cfg_mod)
+
+                run_id, _, _, _, _ = run_train(timestamp, train_loader, val_loader, cfg_mod, cfg_glob, cfg_method, precedent_run_id, precedent_method, prefix=None)
+                return_method = cfg_method["method_FT"]
+
+                # évaluer sur CelebA puis sur le dataset Challenge
+                run_evaluation(timestamp=timestamp, cfg_glob=cfg_glob, val_loader=val_loader, method_FT=return_method, loss_name=loss_name, cfg_mod=cfg_mod, prefix="score sur Celeba", method_kwargs=cfg_method.get("method_kwargs"), index="CeleBa_evaluation")
+                run_evaluation(timestamp=timestamp, cfg_glob=cfg_glob, val_loader=challenge_val_loader, method_FT=return_method, loss_name=loss_name, cfg_mod=cfg_mod, prefix="score sur Dataset Challenge", method_kwargs=cfg_method.get("method_kwargs"), index="Challenge_evaluation")
+
+                print(f"fin d'entrainement par {cfg_method['method_FT']}")
+                return run_id, return_method
