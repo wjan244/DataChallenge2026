@@ -1,7 +1,7 @@
 model: 'vit_tiny_patch16_224'
   
 probing_training:
-  run_execution: True
+  run_execution: False
   loss_name: "HuberLossRegularized"
   learning_rate: 1.0e-3
   num_epoch: 1
@@ -9,6 +9,7 @@ probing_training:
   method_kwargs:
     probing_type: "mlp_probing"
     hidden_size: 512
+    num_classes: 1
 
 adversarial_probing_training:
   run_execution: False
@@ -24,8 +25,8 @@ adversarial_probing_training:
     lambda: 0.5
 
 lora_training:
-  run_execution: False
-  loss_name: "SL1"
+  run_execution: True
+  loss_name: "HuberLossRegularized"
   learning_rate: 2.0e-4
   num_epoch: 1
   method_FT: "lora_training"
@@ -33,3 +34,4 @@ lora_training:
     rank: 8
     alpha: 16
     dropout: 0.2
+    num_classes: 1

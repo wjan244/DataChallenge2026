@@ -15,7 +15,8 @@ def get_augmentation_finetuning_transforms()->None:
     return v2.Compose([v2.RandomHorizontalFlip(p=0.5),
                        v2.RandomApply([
                            v2.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2, hue=0.05)], p=0.8),
-                             v2.RandomApply([v2.GaussianBlur(kernel_size=(3, 5), sigma=(0.1, 2.0))], p=0.3)])
+                             v2.RandomApply([v2.GaussianBlur(kernel_size=(3, 5), sigma=(0.1, 2.0))], p=0.3),
+                             v2.RandomErasing(p=0.2, scale=(0.01, 0.03), value=0)])
     # option 2:  
     # return v2.RandomChoice([v2.Identity(),
     #                        v2.RandomChoice([v2.RandomRotation(degrees=25),

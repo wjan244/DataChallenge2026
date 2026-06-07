@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=25:00:00
+#SBATCH --time=29:00:00
 #SBATCH --cpus-per-task=10 # nber of env = #cpus - 2 (main process + OS)
 #SBATCH --ntasks=1
 #SBATCH --mem=64G 
@@ -26,7 +26,7 @@
 
 #== Run jobs ==
 # sbatch scripts/run_cluster.sbatch # copy the job number
-# tail -f logs/ 840702.log
+# tail -f logs/ 842971.log
 # squeue -j 837419
 # squeue -p 836898
 # cat logs/842971.log

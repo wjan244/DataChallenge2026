@@ -1,0 +1,12 @@
+model: 'convnextv2_base.fcmae_ft_in22k_in1k_384'
+
+probing_training:
+  run_execution: True
+  loss_name: "HuberLoss"
+  learning_rate: 1.0e-3
+  num_epoch: 1
+  method_FT: "probing_training"
+  method_kwargs:
+    num_classes: 1
+    probing_type: "mlp_probing"
+    hidden_size: 512

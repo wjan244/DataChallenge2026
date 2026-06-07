@@ -2,7 +2,7 @@ model: 'vit_base_patch16_dinov3.lvd1689m'
     
 probing_training:
   run_execution: True
-  loss_name: "HuberLossRegularized"
+  loss_name: "HuberLoss"
   learning_rate: 1.0e-3
   num_epoch: 15
   method_FT: "probing_training"
@@ -26,11 +26,12 @@ adversarial_probing_training:
 
 lora_training:
   run_execution: False
-  loss_name: "SL1"
+  loss_name: "HuberLossRegularized"
   learning_rate: 2.0e-4
-  num_epoch: 1
+  num_epoch: 25
   method_FT: "lora_training"
   method_kwargs:
     rank: 8
     alpha: 16
-    dropout: 0.2
+    dropout: 0.1
+    num_classes: 1

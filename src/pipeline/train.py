@@ -106,7 +106,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
             else:
                 y_pred = output
 
-            loss = loss_fn(y_pred, y, pi, gender)
+            loss = loss_fn(y_pred, y, gender)
             # gesion de l'adversarial (loss)
             if isinstance(output,dict):
                 criterion_fairness = torch.nn.BCELoss()
@@ -143,7 +143,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
                 else:
                     y_pred_val = output_val
 
-                batch_loss_val = loss_fn(y_pred_val, y_val, pi_val, gender_val)
+                batch_loss_val = loss_fn(y_pred_val, y_val, gender_val)
                 
                 # gestion de l'adversarial pour la validation
                 if isinstance(output_val, dict):

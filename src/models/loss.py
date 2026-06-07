@@ -16,11 +16,90 @@ class UniversalLossWrapper(nn.Module):
         self.base_loss = base_loss
 
     def forward(self, y_pred, y_true, pi=None, gender=None):
-        if isinstance(self.base_loss,nn.SmoothL1Loss):
+        if isinstance(self.base_loss, nn.SmoothL1Loss):
             return self.base_loss(y_pred, y_true)
-        if isinstance(self.base_loss, HuberLossRegularized):
+        elif isinstance(self.base_loss, HuberLossRegularized):
             return self.base_loss(y_pred, y_true, pi, gender)
+        elif isinstance(self.base_loss, HuberLoss):
+            return self.base_loss(y_pred, y_true, gender)
 
+class HuberLoss(nn.Module):
+    """
+    Perte de Huber (sans pondération d'inclusion), régularisée pour l'équité de genre.
+    Score = (Err_F + Err_M)/2 + alpha * |Err_F - Err_M|
+    """
+    def __init__(self, alpha=1.0, beta=0.1, eps=1e-6):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+        self.eps = eps
+        
+    def _huber_per_group(self, y_true, y_pred):
+        # Si aucun échantillon de ce genre n'est dans le batch, l'erreur est de 0
+        if len(y_true) == 0:
+            return torch.tensor(0.0, device=y_pred.device, requires_grad=True)
+            
+        delta = torch.abs(y_true - y_pred)
+        
+        # Formule de Huber
+        huber_loss = torch.where(
+            delta < self.beta,
+            0.5 * (delta ** 2),
+            self.beta * (delta - 0.5 * self.beta))
+        
+        # Moyenne simple des erreurs du groupe
+        return torch.mean(huber_loss)
+
+    def forward(self, y_pred, y_true, gender):
+        # 1. Extraction de la prédiction (gestion du dictionnaire adversarial)
+        if isinstance(y_pred, dict):
+            y_pred_occ = list(y_pred.values())[0]
+        else:
+            y_pred_occ = y_pred
+
+        # 2. Aplatissement / Pooling de la prédiction pour éviter le bug de taille (ex: 32000)
+        if torch.is_tensor(y_pred_occ):
+            if y_pred_occ.dim() > 1:
+                # Si c'est un tenseur [Batch, Tokens], on prend la moyenne sur les tokens
+                y_pred_occ = y_pred_occ.view(y_pred_occ.size(0), -1).mean(dim=1)
+            else:
+                y_pred_occ = y_pred_occ.view(-1)
+        else:
+            y_pred_occ = torch.tensor(y_pred_occ, dtype=torch.float32).view(-1)
+
+        # 3. Formatage de la vérité terrain (Ground Truth)
+        if torch.is_tensor(y_true):
+            y_true = y_true.view(-1)
+        else:
+            y_true = torch.tensor(y_true, dtype=y_pred_occ.dtype).view(-1)
+
+        # 4. Sécurité d'alignement des longueurs
+        min_len = min(y_pred_occ.numel(), y_true.numel())
+        y_pred_occ = y_pred_occ[:min_len]
+        y_true = y_true[:min_len]
+
+        # 5. Formatage du tenseur de genre
+        if gender is None:
+            g = torch.zeros(min_len, dtype=torch.float32, device=y_pred_occ.device)
+        else:
+            if torch.is_tensor(gender):
+                g = gender.view(-1).to(dtype=torch.float32, device=y_pred_occ.device)[:min_len]
+            else:
+                g = torch.tensor(gender, dtype=torch.float32, device=y_pred_occ.device).view(-1)[:min_len]
+
+        # 6. Création des masques
+        mask_f = (g == 0.0)
+        mask_m = (g == 1.0)
+        
+        # 7. Calcul de l'erreur par sous-groupe
+        err_f = self._huber_per_group(y_true[mask_f], y_pred_occ[mask_f])
+        err_m = self._huber_per_group(y_true[mask_m], y_pred_occ[mask_m])
+        
+        # 8. Application de la régularisation d'équité
+        diff = err_f - err_m
+        loss_fairness = (err_f + err_m) / 2.0 + self.alpha * torch.sqrt(torch.square(diff) + self.eps)
+        
+        return loss_fairness
 
 class HuberLossRegularized(nn.Module):
     """
@@ -153,4 +232,6 @@ def build_loss_fn(loss_descriptor):
 LOSS_MAPPING = {
     "MSE": nn.MSELoss,
     "BCE": nn.BCELoss,
-    "HuberLossRegularized":HuberLossRegularized}
+    "HuberLossRegularized":HuberLossRegularized,
+    "HuberLoss":HuberLoss
+    }

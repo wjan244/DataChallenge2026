@@ -63,17 +63,28 @@ def run_evaluation(timestamp, val_loader, method_FT, cfg_glob, loss_name = None,
             all_targets.append(y_val)
             all_genders.append(gender_val)
 
-        val_score, val_err_f, val_err_m = score_fn(
-            torch.cat(all_preds), torch.cat(all_targets),
-            torch.cat(all_genders))
-    
-        final_val_score = val_score.item().sum()
-        final_val_err_f = val_err_f.item().sum()
-        final_val_err_m = val_err_m.item().sum()
+        # Agréger les résultats de tous les lots
+        all_y_pred = torch.cat(all_preds)
+        all_y_true = torch.cat(all_targets)
+        all_gender = torch.cat(all_genders)
 
-        mlflow.log_metric("val_score", final_val_score)
-        mlflow.log_metric("val_err_female", final_val_err_f)
-        mlflow.log_metric("val_err_male", final_val_err_m)
+        # Calculer le score final avec toutes les données
+        val_score, val_err_f, val_err_m = score_fn(
+            all_y_pred, all_y_true, all_gender
+        )
+
+        # Journaliser les métriques
+        metrics_to_log = {"val_score": val_score}
+        if loss_name == "PWGLoss":
+            metrics_to_log.update({
+                "val_err_f": val_err_f,
+                "val_err_m": val_err_m,
+            })
+        
+        if prefix:
+            metrics_to_log = {f"{prefix}_{k}": v for k, v in metrics_to_log.items()}
+
+        mlflow.log_metrics(metrics_to_log)
 
         # sauvegarde loss en local
         log_path = HISTORY_DIR / f"{timestamp}_train_history_loss_{model_tag}.csv"
