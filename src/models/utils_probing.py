@@ -11,7 +11,11 @@ def inject_linear_mlp_probing(model:torch.nn.Module, probing_type:str, hidden_si
 
     # déterminer le nom de l'attribut de sortie
     if hasattr(container, 'head'):
-        head_attr = 'head'
+        if hasattr(container.head, 'fc'):  # Cas ConvNeXt : on descend d'un niveau
+            container = container.head
+            head_attr = 'fc'
+        else:
+            head_attr = 'head'
     elif hasattr(container, 'classifier'):
         head_attr = 'classifier'
     
