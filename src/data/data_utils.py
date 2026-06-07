@@ -44,7 +44,8 @@ if __name__ == "__main__":
     # Récupération de la distribution cible de référence
     test_distribution = get_test_distribution_from_screenshot(SCREENSHOT_PATH)
 
-    print(f"dimension de train : {len(df_train_sub)}")
+    df_train_clean = df_train_raw.dropna()
+    print(f"Poids max: {df_train_sub['iw'].max()}, Poids min: {df_train_sub['iw'].min()}")
     
     # --- LIGNE AJOUTÉE ICI ---
     print(f"Images uniques (sans les doublons) : {df_train_sub['filename'].nunique()}")
