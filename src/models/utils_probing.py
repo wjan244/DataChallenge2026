@@ -36,6 +36,7 @@ def inject_linear_mlp_probing(model:torch.nn.Module, probing_type:str, hidden_si
         new_head = torch.nn.Sequential(
             torch.nn.Linear(in_features, hidden_size),
             torch.nn.ReLU(),
+            torch.nn.Dropout(p=0.2),
             torch.nn.Linear(hidden_size, out_features))
     else:
         raise ValueError("erreur dans le choix des paramètres de probing")

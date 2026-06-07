@@ -15,8 +15,8 @@ loader:
 augmentation:
   status              : True
   warm_start          : 0
-  warm_stop           : 12
-  augmentation_factor : 3
+  warm_stop           : 18
+  augmentation_factor : 2
 
 
 
