@@ -71,9 +71,11 @@ def load_split_df(run_name: str, split: str) -> pd.DataFrame | None:
 
 
 def apply_filters(df: pd.DataFrame, gender_sel: str, occ_min: float, occ_max: float, has_gt: bool) -> pd.DataFrame:
+    if df.empty:
+        return df
     value_col = "FaceOcclusion" if has_gt else "pred"
     mask = (df[value_col] >= occ_min) & (df[value_col] <= occ_max)
-    if has_gt and gender_sel != "All":
+    if gender_sel != "All" and "gender" in df.columns:
         gender_val = 0.0 if gender_sel == "Female" else 1.0
         mask &= df["gender"] == gender_val
     return df[mask]
@@ -111,10 +113,12 @@ with st.sidebar:
 
     selected_run = st.selectbox("Model run", runs)
 
-    split = st.radio("Split", ["train", "val", "test"])
-    has_gt = split != "test"
+    splits = st.multiselect("Split", ["train", "val", "test"], default=["val"])
+    if not splits:
+        splits = ["val"]
+    has_gt = any(s != "test" for s in splits)
 
-    gender_sel = st.radio("Gender", ["All", "Female", "Male"]) if has_gt else "All"
+    gender_sel = st.radio("Gender", ["All", "Female", "Male"])
 
     occ_range = st.slider("Occlusion interval (%)", 0, 100, (0, 100))
     occ_min, occ_max = occ_range[0] / 100, occ_range[1] / 100
@@ -127,10 +131,20 @@ with st.sidebar:
     )
 
 # ── Load data ─────────────────────────────────────────────────────────────────────
-df = load_split_df(selected_run, split)
-if df is None:
-    st.error(f"No {split}.csv found for run `{selected_run}`. Run the pipeline to generate split predictions.")
-    st.stop()
+_dfs, missing_splits = [], []
+for _s in splits:
+    _s_df = load_split_df(selected_run, _s)
+    if _s_df is None:
+        missing_splits.append(_s)
+    else:
+        _s_df = _s_df.copy()
+        _s_df["_split"] = _s
+        _dfs.append(_s_df)
+
+no_data = len(_dfs) == 0
+df = pd.concat(_dfs, ignore_index=True) if _dfs else pd.DataFrame(
+    columns=["filename", "FaceOcclusion", "pred", "gender", "iw", "_split"]
+)
 
 df_filtered = apply_filters(df, gender_sel, occ_min, occ_max, has_gt)
 
@@ -140,6 +154,8 @@ tab_stats, tab_pic, tab_stars = st.tabs(["Statistics", "Picture", "Stars"])
 
 # ─── Statistics ───────────────────────────────────────────────────────────────────
 with tab_stats:
+    if missing_splits:
+        st.info(f"No CSV found for split(s): {', '.join(missing_splits)} — predictions not available.")
     st.subheader("Occlusion Distribution")
 
     # Histogram — GT and predictions overlaid, all available splits
@@ -191,20 +207,22 @@ with tab_stats:
             st.pyplot(fig2)
             plt.close(fig2)
 
-    if has_gt and not df_filtered.empty:
+    if has_gt:
         st.subheader("Competition Score (filtered interval)")
+        c1, c2, c3 = st.columns(3)
         female = df_filtered[df_filtered["gender"] == 0.0][["pred", "FaceOcclusion"]].dropna()
         male   = df_filtered[df_filtered["gender"] == 1.0][["pred", "FaceOcclusion"]].dropna()
-        if len(female) > 0 and len(male) > 0:
+        if no_data or df_filtered.empty or len(female) == 0 or len(male) == 0:
+            c1.metric("Score", "-")
+            c2.metric("Err Female", "-")
+            c3.metric("Err Male", "-")
+        else:
             score = metric_fn(female, male)
             err_f = error_fn(female)
             err_m = error_fn(male)
-            c1, c2, c3 = st.columns(3)
             c1.metric("Score", f"{score:.5f}")
             c2.metric("Err Female", f"{err_f:.5f}")
             c3.metric("Err Male", f"{err_m:.5f}")
-        else:
-            st.info("Not enough data for both genders in the selected interval.")
     elif not has_gt:
         st.info("Competition score not available for the test split (no ground truth).")
 
@@ -223,7 +241,9 @@ with tab_stats:
 with tab_pic:
     st.subheader("Random Image Viewer")
 
-    if df_filtered.empty:
+    if no_data:
+        st.info(f"No CSV found for split(s): {', '.join(missing_splits)} — predictions not available.")
+    elif df_filtered.empty:
         st.warning("No images match the current filters.")
     else:
         if st.button("🎲 Load random image"):
@@ -246,23 +266,25 @@ with tab_pic:
         with col_info:
             if has_gt and not pd.isna(row["FaceOcclusion"]):
                 st.metric("GT Occlusion", f"{row['FaceOcclusion']:.4f}")
-            st.metric("Predicted", f"{row['pred']:.4f}")
-            if has_gt and not pd.isna(row["FaceOcclusion"]):
-                st.metric("Delta (pred − GT)", f"{row['pred'] - row['FaceOcclusion']:+.4f}")
+            pred_val = row.get("pred", float("nan"))
+            st.metric("Predicted", f"{pred_val:.4f}" if not pd.isna(pred_val) else "-")
+            if has_gt and not pd.isna(row.get("FaceOcclusion", float("nan"))) and not pd.isna(pred_val):
+                st.metric("Delta (pred − GT)", f"{pred_val - row['FaceOcclusion']:+.4f}")
             if not pd.isna(row.get("gender", float("nan"))):
                 st.write(f"**Gender:** {'Female' if row['gender'] == 0.0 else 'Male'}")
 
             st.divider()
+            row_split = row.get("_split", splits[0])
             stars = load_stars()
-            is_starred = any(s["split"] == split and s["filename"] == row["filename"] for s in stars)
+            is_starred = any(s["split"] == row_split and s["filename"] == row["filename"] for s in stars)
             if is_starred:
                 if st.button("★ Unstar"):
-                    stars = [s for s in stars if not (s["split"] == split and s["filename"] == row["filename"])]
+                    stars = [s for s in stars if not (s["split"] == row_split and s["filename"] == row["filename"])]
                     save_stars(stars)
                     st.rerun()
             else:
                 if st.button("☆ Star this image"):
-                    stars.append({"split": split, "filename": row["filename"]})
+                    stars.append({"split": row_split, "filename": row["filename"]})
                     save_stars(stars)
                     st.rerun()
 
@@ -276,10 +298,10 @@ with tab_stars:
         st.info("No starred images yet — use the Picture tab to star images.")
     else:
         stars_df = pd.DataFrame(stars)
-        split_stars = stars_df[stars_df["split"] == split] if "split" in stars_df.columns else stars_df
+        split_stars = stars_df[stars_df["split"].isin(splits)] if "split" in stars_df.columns else stars_df
 
         if split_stars.empty:
-            st.info(f"No starred images for the '{split}' split.")
+            st.info(f"No starred images for the selected split(s).")
         else:
             merged = split_stars.merge(df, on="filename", how="inner")
             merged = apply_filters(merged, gender_sel, occ_min, occ_max, has_gt)
