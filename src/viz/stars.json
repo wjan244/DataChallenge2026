@@ -22,5 +22,9 @@
   {
     "split": "train",
     "filename": "database3/database3/m.02692v7/9-FaceId-0_align.webp"
+  },
+  {
+    "split": "val",
+    "filename": "database3/database3/m.02mcr6/92-FaceId-0_align.webp"
   }
 ]
