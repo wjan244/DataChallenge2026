@@ -1,6 +1,6 @@
 globaux:
   SEED                : 42
-  N_SAMPLE            : 65000
+  N_SAMPLE            : 100000
   N_BINS              : 20
   NUM_CLASSES         : 1
   PATIENCE            : 5

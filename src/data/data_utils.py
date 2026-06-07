@@ -44,6 +44,11 @@ if __name__ == "__main__":
     # Récupération de la distribution cible de référence
     test_distribution = get_test_distribution_from_screenshot(SCREENSHOT_PATH)
 
+    print(f"dimension de train : {len(df_train_sub)}")
+    
+    # --- LIGNE AJOUTÉE ICI ---
+    print(f"Images uniques (sans les doublons) : {df_train_sub['filename'].nunique()}")
+
     # Calcul des histogrammes réels de contrôle
     train_distribution, _ = np.histogram(df_train_raw["FaceOcclusion"], bins=N_BINS, density=True) 
     train_distribution = (train_distribution + eps) / (np.sum(train_distribution) + eps)
