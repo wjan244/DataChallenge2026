@@ -1,4 +1,3 @@
-import time
 import torch
 import numpy as np
 import random
@@ -23,6 +22,7 @@ from src.pipeline.run_probing import run_probing
 from src.pipeline.run_lora import run_lora
 from src.pipeline.run_scratch import run_scratch
 from src.pipeline.run_cnn_ft import run_cnn_ft
+from src.dino.run_lp import run_lp
 
 
 SEED = load_config(CONFIG_DEFAULT)["globaux"]["SEED"]
@@ -46,7 +46,9 @@ def main(file_name):
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    if cfg.get("scratch_training", {}).get("run_execution") == True:
+    if cfg.get("embedding_dir") is not None:
+        run_lp(file_name, timestamp, experiment_id)
+    elif cfg.get("scratch_training", {}).get("run_execution") == True:
         run_scratch(cfg, timestamp, experiment_id)
     elif cfg.get("cnn_ft_training", {}).get("run_execution") == True:
         run_cnn_ft(cfg, timestamp, experiment_id)

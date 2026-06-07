@@ -1,0 +1,25 @@
+# Model
+model_name: "facebook/dinov3-vith16plus-pretrain-lvd1689m"
+embedding_dir: "embedding-vit16h+"
+save_fp16: false
+embed_batch_size: 256
+
+# Data
+include_noisy_in_val: true
+n_bins: 20
+smooth_alpha: 50        # count-based: alpha/n_samples added to each bin
+
+# Linear probe
+lp_embedding: "concat"  # "cls" | "patch_mean" | "concat"
+lp_hidden: 256          # 0 = plain linear
+lp_lr: 1.0e-3
+lp_epochs: 100
+lp_batch_size: 512
+lp_loss: "HuberPWGLossRegularized"
+lp_loss_alpha: 1.0
+lp_loss_beta: 0.1
+lp_patience: 10
+lp_weight_decay: 1.0e-2
+
+# General
+seed: 42
