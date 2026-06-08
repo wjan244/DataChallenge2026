@@ -41,7 +41,8 @@ class LinearProbe(torch.nn.Module):
 
 def build_loss(cfg):
     loss_cls = LOSS_MAPPING[cfg["lp_loss"]]
-    all_kwargs = {"alpha": cfg.get("lp_loss_alpha", 1.0), "beta": cfg.get("lp_loss_beta", 0.1)}
+    all_kwargs = {"alpha": cfg.get("lp_loss_alpha", 1.0), "beta": cfg.get("lp_loss_beta", 0.1),
+                  "gamma": cfg.get("lp_loss_gamma", 1.0), "kappa": cfg.get("lp_loss_kappa", 1.0)}
     sig = inspect.signature(loss_cls.__init__).parameters
     loss_kwargs = {k: v for k, v in all_kwargs.items() if k in sig}
     loss_fn = UniversalLossWrapper(loss_cls(**loss_kwargs))

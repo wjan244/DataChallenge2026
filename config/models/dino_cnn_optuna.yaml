@@ -1,0 +1,18 @@
+# Model
+model_name: "facebook/dinov3-vith16plus-pretrain-lvd1689m"
+type: dino_cnn
+patch_use_cls: false
+embedding_dir: "embedding-vit16h+patches"
+
+# Data
+n_bins: 20
+smooth_alpha: 50        # count-based: alpha/n_samples added to each bin
+train_use_noisy: true
+val_use_noisy: true
+lp_batch_size: 256
+lp_loss: "CompoundLoss"
+
+
+optuna_n_trials: 50
+optuna_epochs: 20   # short runs during search
+optuna_patience: 5   # short runs during search

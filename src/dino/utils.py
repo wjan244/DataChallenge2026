@@ -37,8 +37,7 @@ class EmbeddingDataset(Dataset):
         self.meta = pd.read_csv(emb_dir / f"{split}_meta.csv")
         
         # Remove the noisy samples
-        noisy = pd.read_csv(DATA / "occlusion_datasets" / "validation_noisy.csv",
-                            header=None, names=["filename", "FaceOcclusion", "gender"])
+        noisy = pd.read_csv(DATA / "occlusion_datasets" / "validation_noisy.csv")
         noisy_files = set(noisy["filename"])
         mask = self.meta["filename"].isin(noisy_files)   # True = noisy
 
@@ -170,6 +169,7 @@ def save_submission_cnn(model, cfg, loader, timestamp, split="test"):
     df["gender"] = "x"
     df[["filename", "FaceOcclusion", "gender"]].to_csv(out, index=False)
     print(f"Submission saved → {out}  ({len(df)} rows)")
+    
     
 class PatchDataset(Dataset):
     def __init__(self, split, cfg):

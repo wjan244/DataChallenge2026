@@ -72,8 +72,7 @@ def main():
                                         random_state=42, shuffle=True)
     df_train = df_train.reset_index(drop=True)
     
-    df_noisy = pd.read_csv(CSV_DIR / "validation_noisy.csv",
-                           header=None, names=["filename", "FaceOcclusion", "gender"])
+    df_noisy = pd.read_csv(CSV_DIR / "validation_noisy.csv")
     noisy_train, noisy_val = train_test_split(df_noisy, test_size=0.2,
                                               random_state=42, shuffle=True)
     
@@ -87,7 +86,7 @@ def main():
     fp16 = cfg.get("save_fp16", False)
     save_patches = cfg.get("save_patches", False)
 
-    for split, df in [("train", df_train), ("val", df_val), ("test", df_test)]:
+    for split, df in [("val", df_val), ("test", df_test)]: #[("train", df_train), ("val", df_val), ("test", df_test)]:
         print(f"\nExtracting {split} ({len(df)} images)...")
         cls, patch_mean = extract_embeddings(model, processor, df, n_reg, batch_size, save_patches=save_patches, patches_path=emb_dir / f"{split}_patches.bin")
         save_split(cls, patch_mean, df, emb_dir, split, fp16)

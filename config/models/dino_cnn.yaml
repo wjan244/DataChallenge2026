@@ -9,26 +9,24 @@ save_patches: true
 
 # Data
 n_bins: 20
-smooth_alpha: 50        # count-based: alpha/n_samples added to each bin
 train_use_noisy: true
 val_use_noisy: true
 
-# Linear probe
-lp_embedding: "concat"  # "cls" | "patch_mean" | "concat"
-lp_hidden: 256          # 0 = plain linear
-lp_lr: 1.0e-3
-lp_weight_decay: 1.0e-3
+# CNN
+smooth_alpha: 50        
+lp_lr: 5.0e-3
+lp_weight_decay: 1.0e-2
 lp_epochs: 100
-lp_batch_size: 256
-lp_loss: "HuberPWGLossRegularized"
-lp_loss_alpha: 1
-lp_loss_beta: 0.1
+lp_batch_size: 512
+lp_loss: "CompoundLoss"
+lp_loss_alpha: 2.0    
+lp_loss_beta: 0.2     
+lp_loss_gamma: 1.0    
+lp_loss_kappa: 1.0    
 lp_patience: 20
 lp_dropout: 0.2
-# General
-seed: 10
 
 
-optuna_n_trials: 50
-optuna_epochs: 20   # short runs during search
-optuna_patience: 5   # short runs during search
+# optuna_n_trials: 50
+# optuna_epochs: 20   # short runs during search
+# optuna_patience: 5   # short runs during search

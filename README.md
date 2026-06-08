@@ -33,7 +33,11 @@ Best params: {'lp_lr': 0.0008699032142533894, 'lp_hidden': 128, 'lp_dropout': 0.
 
 ## CNN on Pathc
 
-embedding job id: 14280870
+embedding job id: DONE
+
+first cnn run: 14291256
+
+optuna run: 14293657
 
 ## Meeting notes
 

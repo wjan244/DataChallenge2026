@@ -2,40 +2,103 @@ import torch
 import mlflow
 import time
 import optuna
+import torch.nn as nn
+import torch.functional as F
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
 from src.config import DEVICE, CHECKPOINT_DIR, NUM_WORKERS
-from src.models.scratch_cnn import _init_weights
 from src.dino.run_lp import build_loss
 from src.dino.utils import load_config, PatchDataset, save_submission_cnn, eval_epoch_cnn
 
 _PIN = DEVICE.type == "cuda"
 _PW  = NUM_WORKERS > 0
 
-class PatchCNN(torch.nn.Module):
-    def __init__(self, dropout=0.3, use_cls=False):
+
+
+class PatchCNN(nn.Module):
+    def __init__(self, patch_dim=1280, dropout=0.3, use_cls=True):
         super().__init__()
         self.use_cls = use_cls
-        self.conv = torch.nn.Sequential(
-            torch.nn.Conv2d(1280, 256, 1, bias=False), torch.nn.BatchNorm2d(256), torch.nn.GELU(), #256x14x14 no spatial mixing
-            torch.nn.Conv2d(256, 64, 3, padding=1, bias=False), torch.nn.BatchNorm2d(64), torch.nn.GELU(), #64x14x14 spatial mixing
-            torch.nn.Conv2d(64, 16, 3, padding=1, bias=False), torch.nn.BatchNorm2d(16), torch.nn.GELU(), #16x14x14 spatial mixing
-            torch.nn.Conv2d(16, 8, 3, stride=2, padding=1, bias=False), torch.nn.BatchNorm2d(8), torch.nn.GELU(), #8x7x8 spatial mixing with stride=2
-        )
-        head_in = 392 + (1280 if use_cls else 0)
-        self.head = torch.nn.Sequential(
-            torch.nn.Linear(head_in, 128), torch.nn.GELU(), torch.nn.Dropout(dropout),
-            torch.nn.Linear(128, 1), torch.nn.Sigmoid()
-        )
-        
-        _init_weights(self)
 
+        self.conv = nn.Sequential(
+            # Stage 1: channel reduction, no spatial mixing
+            nn.Conv2d(patch_dim, 512, 1, bias=False),
+            nn.GroupNorm(1, 512),
+            nn.GELU(),
+
+            # Stage 2: spatial mixing, keep 16×16
+            nn.Conv2d(512, 256, 3, padding=1, bias=False),
+            nn.GroupNorm(1, 256),
+            nn.GELU(),
+
+            # Stage 3: spatial mixing, keep 16×16
+            nn.Conv2d(256, 128, 3, padding=1, bias=False),
+            nn.GroupNorm(1, 128),
+            nn.GELU(),
+
+            # Stage 4: downsample to 8×8
+            nn.Conv2d(128, 64, 3, stride=2, padding=1, bias=False),
+            nn.GroupNorm(1, 64),
+            nn.GELU(),
+
+            # Stage 5: refine at 8×8
+            nn.Conv2d(64, 32, 3, padding=1, bias=False),
+            nn.GroupNorm(1, 32),
+            nn.GELU(),
+        )
+        # Flatten 32×8×8 = 2048 — MLP sees all spatial positions
+        conv_out_dim = 32 * 8 * 8   # 2048
+
+        cls_out_dim = 512 if use_cls else 0
+        self.cls_proj = nn.Linear(patch_dim, cls_out_dim) if use_cls else None
+
+        head_in = conv_out_dim + cls_out_dim  # 2048 + 512 = 2560
+
+        self.head = nn.Sequential(
+            nn.Linear(head_in, 512),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(512, 64),
+            nn.GELU(),
+            nn.Dropout(dropout / 2),
+            nn.Linear(64, 1),
+            nn.Sigmoid()
+        )
+
+        self._init_weights()
+
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                # 'leaky_relu' with a=0 ≈ GELU scaling
+                # or just use the exact GELU-aware formula
+                nn.init.kaiming_normal_(m.weight, 
+                                        mode='fan_out',
+                                        nonlinearity='linear')  # conservative
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.ones_(m.weight)
+                nn.init.zeros_(m.bias)
+
+            elif isinstance(m, nn.Linear):
+                # Transformer-style init for linear layers
+                nn.init.trunc_normal_(m.weight, std=0.02)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+                    
+                
     def forward(self, x, cls=None):
-        feat = self.conv(x).flatten(1)
+        feat = self.conv(x)       # [B, 32, 8, 8]
+        feat = feat.flatten(1)    # [B, 2048] — MLP sees full spatial map
+
         if self.use_cls and cls is not None:
-            feat = torch.cat([feat, cls], dim=1)
+            cls_feat = F.gelu(self.cls_proj(cls))       # [B, 512]
+            feat = torch.cat([feat, cls_feat], dim=1)   # [B, 2560]
+
         return self.head(feat)
     
 
