@@ -55,13 +55,13 @@ uv sync
 # source ~/.bashrc
 source .venv/bin/activate
 uv pip install "transformers<5.0"
-echo "args: $*"
-if [ $# -eq 0 ]; then
-  python main.py
-else
-  python main.py --config "$@"
-fi
-# python src/dino/embed.py
+# echo "args: $*"
+# if [ $# -eq 0 ]; then
+#   python main.py
+# else
+#   python main.py --config "$@"
+# fi
+python src/dino/embed.py
 
 echo "=== JOB END ==="
 echo "timestamp: $(date -Is)"

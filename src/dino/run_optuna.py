@@ -5,12 +5,8 @@ import pandas as pd
 
 from torch.utils.data import DataLoader
 from src.config import DEVICE, CHECKPOINT_DIR, NUM_WORKERS, CONFIG
-from src.dino.utils import load_config, EmbeddingDataset, eval_epoch
-from src.dino.run_lp import LinearProbe, build_loss, train_lp, _PIN, _PW
-
-
-
-#objective(trial, base_cfg, experiment_id, train_ds, val_ds)
+from src.dino.utils import load_config, EmbeddingDataset
+from src.dino.run_lp import LinearProbe, build_loss, train_lp, _PIN
 
 def objective(trial, base_cfg, experiment_id):
     cfg = {**base_cfg}
@@ -19,6 +15,7 @@ def objective(trial, base_cfg, experiment_id):
     cfg["lp_dropout"]      = trial.suggest_float("lp_dropout", 0.0, 0.5)
     cfg["lp_weight_decay"] = trial.suggest_float("lp_weight_decay", 1e-4, 1e-1, log=True)
     cfg["lp_loss_alpha"]   = trial.suggest_float("lp_loss_alpha", 0.1, 5.0)
+    cfg["lp_loss_beta"]   = trial.suggest_float("lp_loss_beta", 0.01, 0.5)
     cfg["smooth_alpha"]    = trial.suggest_int("smooth_alpha", 5, 100)
     cfg["lp_loss"]         = trial.suggest_categorical("lp_loss", ["PWLoss", "PWGLoss", "PWGLossRegularized", "HuberPWGLossRegularized"])
     cfg["lp_epochs"]       = base_cfg.get("optuna_epochs", 20)
@@ -29,9 +26,9 @@ def objective(trial, base_cfg, experiment_id):
     train_ds = EmbeddingDataset("train", cfg)
     val_ds   = EmbeddingDataset("val",   cfg)
     train_loader = DataLoader(train_ds, batch_size=bs, shuffle=True,
-                              num_workers=NUM_WORKERS, pin_memory=_PIN, persistent_workers=_PW)
+                              num_workers=NUM_WORKERS, pin_memory=_PIN, persistent_workers=False)
     val_loader   = DataLoader(val_ds,   batch_size=bs,
-                              num_workers=NUM_WORKERS, pin_memory=_PIN, persistent_workers=_PW)
+                              num_workers=NUM_WORKERS, pin_memory=_PIN, persistent_workers=False)
 
     input_dim = train_ds.embeddings.shape[1]
     model     = LinearProbe(input_dim, cfg["lp_hidden"], cfg["lp_dropout"]).to(DEVICE)
@@ -51,7 +48,8 @@ def objective(trial, base_cfg, experiment_id):
                          optimizer, scheduler, loss_fn, save_path, cfg, trial=trial)
     return best_score
 
-def run_optuna(file_name, timestamp, experiment_id):
+def run_optuna_lp(file_name, timestamp, experiment_id):
+    print("Starting Optuna Optimization")
     cfg = load_config(file_name)
     n_trials = cfg.get("optuna_n_trials", 20)
 

@@ -1,33 +1,34 @@
 # Model
 model_name: "facebook/dinov3-vith16plus-pretrain-lvd1689m"
-type: dino_lp
-embedding_dir: "embedding-vit16h+"
-save_fp16: True
-embed_batch_size: 256
+type: dino_cnn
+patch_use_cls: false
+embedding_dir: "embedding-vit16h+patches"
+save_fp16: true
+embed_batch_size: 32
 save_patches: true
 
 # Data
 n_bins: 20
 smooth_alpha: 50        # count-based: alpha/n_samples added to each bin
-val_use_noisy: true
 train_use_noisy: true
+val_use_noisy: true
 
 # Linear probe
 lp_embedding: "concat"  # "cls" | "patch_mean" | "concat"
 lp_hidden: 256          # 0 = plain linear
 lp_lr: 1.0e-3
 lp_weight_decay: 1.0e-3
-lp_epochs: 50
-lp_batch_size: 2048
+lp_epochs: 100
+lp_batch_size: 256
 lp_loss: "HuberPWGLossRegularized"
-lp_loss_alpha: 3
+lp_loss_alpha: 1
 lp_loss_beta: 0.1
-lp_patience: 5
+lp_patience: 20
 lp_dropout: 0.2
 # General
 seed: 10
 
 
-# optuna_n_trials: 50
-# optuna_epochs: 20   # short runs during search
-# optuna_patience: 5   # short runs during search
+optuna_n_trials: 50
+optuna_epochs: 20   # short runs during search
+optuna_patience: 5   # short runs during search

@@ -37,13 +37,21 @@ class EmbeddingDataset(Dataset):
         self.meta = pd.read_csv(emb_dir / f"{split}_meta.csv")
         
         # Remove the noisy samples
+        noisy = pd.read_csv(DATA / "occlusion_datasets" / "validation_noisy.csv",
+                            header=None, names=["filename", "FaceOcclusion", "gender"])
+        noisy_files = set(noisy["filename"])
+        mask = self.meta["filename"].isin(noisy_files)   # True = noisy
+
         if split == "val" and not cfg.get("val_use_noisy", True):
-            noisy = pd.read_csv(DATA / "occlusion_datasets" / "validation_noisy.csv",
-                                header=None, names=["filename", "FaceOcclusion", "gender"])
-            noisy_files = set(noisy["filename"])
-            self.meta = self.meta[~self.meta["filename"].isin(noisy_files)].reset_index(drop=True)
-    
-        
+            keep_idx = self.meta[~mask].index.tolist()        # original indices to keep
+            self.meta = self.meta[~mask].reset_index(drop=True)
+            
+        elif split == "train" and not cfg.get("train_use_noisy", True):
+            keep_idx = self.meta[~mask].index.tolist()        # original indices to keep
+            self.meta = self.meta[~mask].reset_index(drop=True)
+        else:
+            keep_idx = list(range(len(self.meta)))
+            
         # load embeddings based on lp_embedding config
         mode = cfg["lp_embedding"]  # "cls" | "patch_mean" | "concat"
         if mode in ("cls", "concat"):
@@ -52,11 +60,11 @@ class EmbeddingDataset(Dataset):
             patch = torch.load(emb_dir / f"{split}_patch_mean.pt", weights_only=False).float()
 
         if mode == "cls":
-            self.embeddings = cls # [N x D]
+            self.embeddings = cls[keep_idx] # [N x D]
         elif mode == "patch_mean":
-            self.embeddings = patch # [N x D]
+            self.embeddings = patch[keep_idx] # [N x D]
         else:  # concat
-            self.embeddings = torch.cat([cls, patch], dim=1) # [N x 2D]
+            self.embeddings = torch.cat([cls, patch], dim=1)[keep_idx] # [N x 2D]
 
         n = len(self.meta)
         if split != "test":
@@ -102,6 +110,27 @@ def eval_epoch(model, loader, loss_fn):
     return val_score.item(), err_f.item(), err_m.item(), val_loss
 
 
+
+def eval_epoch_cnn(model, loader, loss_fn):
+    score_fn = PWScore()
+    preds, ys, iws, pis, gws, genders = [], [], [], [], [], []
+    model.eval()
+    with torch.no_grad():
+        for emb, cls, y, gender, iw, pi, gw in loader:
+            pred = model(emb.to(DEVICE), cls.to(DEVICE)).squeeze(-1).cpu()
+            preds.append(pred); ys.append(y); iws.append(iw)
+            pis.append(pi); gws.append(gw); genders.append(gender)
+
+    p, y, iw, pi, gw, g = (torch.cat(x) for x in [preds, ys, iws, pis, gws, genders])
+    
+    val_score, err_f, err_m = score_fn(p, y, iw, pi, g)
+    
+    val_loss = loss_fn(p, y, iw, pi, gw, g).item()
+    
+    return val_score.item(), err_f.item(), err_m.item(), val_loss
+
+
+
 def save_submission(model, cfg, loader, timestamp, split="test"):
     emb_dir = DATA / cfg["embedding_dir"]
     model.eval()
@@ -122,3 +151,80 @@ def save_submission(model, cfg, loader, timestamp, split="test"):
     df[["filename", "FaceOcclusion", "gender"]].to_csv(out, index=False)
     print(f"Submission saved → {out}  ({len(df)} rows)")
 
+def save_submission_cnn(model, cfg, loader, timestamp, split="test"):
+    emb_dir = DATA / cfg["embedding_dir"]
+    model.eval()
+    preds = []
+    with torch.no_grad():
+        for emb, cls, *_ in loader:
+            pred = model(emb.to(DEVICE), cls.to(DEVICE)).squeeze(-1).cpu()
+            preds.append(pred)
+    
+    SUBMISSION_DIR.mkdir(parents=True, exist_ok=True)
+    name = cfg.get("name", cfg["embedding_dir"])
+    out = SUBMISSION_DIR / f"{timestamp}_{name}" / f"{split}.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)    
+    
+    df = pd.read_csv(emb_dir / "test_meta.csv", delimiter=',')
+    df["FaceOcclusion"] = torch.cat(preds).numpy()
+    df["gender"] = "x"
+    df[["filename", "FaceOcclusion", "gender"]].to_csv(out, index=False)
+    print(f"Submission saved → {out}  ({len(df)} rows)")
+    
+class PatchDataset(Dataset):
+    def __init__(self, split, cfg):
+        emb_dir = DATA / cfg["embedding_dir"]
+        self.meta = pd.read_csv(emb_dir / f"{split}_meta.csv")
+        N_orig = len(self.meta)
+          
+        if (split == "val" and not cfg.get("val_use_noisy", True)) or \
+        (split == "train" and not cfg.get("train_use_noisy", True)):
+            noisy = pd.read_csv(DATA / "occlusion_datasets" / "validation_noisy.csv",
+                                        header=None, names=["filename", "FaceOcclusion", "gender"])
+            noisy_files = set(noisy["filename"])
+            self.meta = self.meta[~self.meta["filename"].isin(noisy_files)]
+            keep_idx = self.meta.index.tolist()   # original indices before reset
+            self.meta = self.meta.reset_index(drop=True)
+        else:
+            keep_idx = list(range(len(self.meta)))
+        
+        patches_raw = np.memmap(emb_dir / f"{split}_patches.bin",
+                                dtype=np.float16, mode='r',
+                                shape=(N_orig, 196, 1280))
+        self.keep_idx = keep_idx  # store for __getitem__
+        self._patches_raw = patches_raw  # keep reference alive
+   
+        # load embeddings based on lp_embedding config
+        if cfg.get("patch_use_cls", False):
+            self.cls = torch.load(emb_dir / f"{split}_cls.pt",
+                                mmap=True, weights_only=False)[keep_idx]
+        else:
+            self.cls = None
+            
+        n = len(self.meta)
+        if split != "test":
+            self.labels  = torch.tensor(self.meta["FaceOcclusion"].values, dtype=torch.float32)
+            self.genders = torch.tensor(self.meta["gender"].values,        dtype=torch.float32)
+            self.iws     = torch.tensor(compute_laplacian_iw(self.meta, cfg["n_bins"], cfg["smooth_alpha"]), dtype=torch.float32)
+            self.pis     = 1/30 + self.labels
+            W_F, W_M    = compute_gender_weights(self.labels, self.genders)
+            bins_gender = torch.linspace(0, 1, N_BINS_GENDER + 1)
+            bin_idx     = (torch.bucketize(self.labels, bins_gender, right=False) - 1).clamp(0, N_BINS_GENDER - 1)
+            self.gws    = torch.where(self.genders == 0.0, W_F[bin_idx], W_M[bin_idx])
+        else:
+            self.labels   = torch.zeros(n)
+            self.genders  = torch.full((n,), -1.0)
+            self.iws      = torch.ones(n)
+            self.pis      = torch.ones(n)
+            self.gws      = torch.ones(n)
+
+            
+    def __len__(self):
+        return len(self.meta)
+    
+    def __getitem__(self, idx):
+        orig_idx = self.keep_idx[idx]
+        x = torch.from_numpy(self._patches_raw[orig_idx].copy()).float().reshape(1280, 14, 14)
+        cls = self.cls[idx].float() if self.cls is not None else torch.zeros(1280)
+
+        return x, cls, self.labels[idx], self.genders[idx], self.iws[idx], self.pis[idx], self.gws[idx]

@@ -38,7 +38,7 @@ class PLoss(nn.Module):
 
     def forward(self, y_pred, y_true, iw, pi, gw, gender):
         # gender not used but added for eeasier calling of the function without if
-        combined_weights = iw
+        combined_weights = pi
         return torch.sum(combined_weights * (y_true - y_pred) ** 2) / (torch.sum(combined_weights)+EPS)
     
 class PWLoss(nn.Module):
