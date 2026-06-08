@@ -23,6 +23,7 @@ from src.pipeline.run_lora import run_lora
 from src.pipeline.run_scratch import run_scratch
 from src.pipeline.run_cnn_ft import run_cnn_ft
 from src.dino.run_lp import run_lp
+from src.dino.run_optuna import run_optuna_lp
 
 
 SEED = load_config(CONFIG_DEFAULT)["globaux"]["SEED"]
@@ -47,7 +48,10 @@ def main(file_name):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     if cfg.get("embedding_dir") is not None:
-        run_lp(file_name, timestamp, experiment_id)
+        if cfg.get("optnuma_n_trials") is not None:
+            run_optuna_lp(file_name, timestamp, experiment_id)
+        else:
+            run_lp(file_name, timestamp, experiment_id)
     elif cfg.get("scratch_training", {}).get("run_execution") == True:
         run_scratch(cfg, timestamp, experiment_id)
     elif cfg.get("cnn_ft_training", {}).get("run_execution") == True:

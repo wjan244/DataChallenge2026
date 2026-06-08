@@ -32,6 +32,25 @@ class WeightedLiteMSELoss(nn.Module):
             print("coefficient de reweighting indéfinis", e)
             return None
 
+class PLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, y_pred, y_true, iw, pi, gw, gender):
+        # gender not used but added for eeasier calling of the function without if
+        combined_weights = iw
+        return torch.sum(combined_weights * (y_true - y_pred) ** 2) / (torch.sum(combined_weights)+EPS)
+    
+class PWLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, y_pred, y_true, iw, pi, gw, gender):
+        # gender not used but added for eeasier calling of the function without if
+        combined_weights = iw * pi
+        return torch.sum(combined_weights * (y_true - y_pred) ** 2) / (torch.sum(combined_weights)+EPS)
+    
+    
 class PWGLoss(nn.Module):
     def __init__(self):
         super().__init__()
@@ -91,7 +110,7 @@ class UniversalLossWrapper(nn.Module):
         self.base_loss = base_loss
 
     def forward(self, y_pred, y_true, iw=None, w_pdf=None, gw=None, gender=None):
-        if isinstance(self.base_loss, (PWGLoss, PWGLossRegularized,HuberPWGLossRegularized)):
+        if isinstance(self.base_loss, (PWGLoss, PWGLossRegularized, HuberPWGLossRegularized, PWLoss, PLoss)):
             return self.base_loss(y_pred, y_true, iw, w_pdf, gw, gender)
         if isinstance(self.base_loss, WeightedMSELoss):
             return self.base_loss(y_pred, y_true, iw, w_pdf)
@@ -120,6 +139,8 @@ LOSS_MAPPING = {
     "BCE": nn.BCELoss,
     "nMSE": WeightedMSELoss,
     "nLiteMSE": WeightedLiteMSELoss,
+    "PLoss": PLoss,
+    "PWLoss": PWLoss,
     "PWGLoss": PWGLoss,
     "PWGLossRegularized": PWGLossRegularized,
     "HuberPWGLossRegularized": HuberPWGLossRegularized,

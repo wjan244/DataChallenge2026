@@ -36,6 +36,14 @@ class EmbeddingDataset(Dataset):
         emb_dir = DATA / cfg["embedding_dir"]
         self.meta = pd.read_csv(emb_dir / f"{split}_meta.csv")
         
+        # Remove the noisy samples
+        if split == "val" and not cfg.get("val_use_noisy", True):
+            noisy = pd.read_csv(DATA / "occlusion_datasets" / "validation_noisy.csv",
+                                header=None, names=["filename", "FaceOcclusion", "gender"])
+            noisy_files = set(noisy["filename"])
+            self.meta = self.meta[~self.meta["filename"].isin(noisy_files)].reset_index(drop=True)
+    
+        
         # load embeddings based on lp_embedding config
         mode = cfg["lp_embedding"]  # "cls" | "patch_mean" | "concat"
         if mode in ("cls", "concat"):

@@ -2,6 +2,7 @@ import torch
 import mlflow
 import inspect
 import time
+import optuna
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader
@@ -20,11 +21,19 @@ class LinearProbe(torch.nn.Module):
         if hidden == 0:
             self.net = torch.nn.Sequential(torch.nn.Linear(input_dim, 1), torch.nn.Sigmoid())
         else:
+            # self.net = torch.nn.Sequential(
+            #     torch.nn.Linear(input_dim, hidden), torch.nn.GELU(),
+            #     torch.nn.Dropout(dropout),
+            #     torch.nn.Linear(hidden, 1), torch.nn.Sigmoid()
+            # )
             self.net = torch.nn.Sequential(
-                torch.nn.Linear(input_dim, hidden), torch.nn.ReLU(),
+                torch.nn.Linear(input_dim, hidden), torch.nn.GELU(),
                 torch.nn.Dropout(dropout),
-                torch.nn.Linear(hidden, 1), torch.nn.Sigmoid()
-            )
+                torch.nn.Linear(hidden, hidden // 2), torch.nn.GELU(),
+                torch.nn.Dropout(dropout),
+                torch.nn.Linear(hidden // 2, 1), torch.nn.Sigmoid()
+            )   
+            
         _init_weights(self)
         
     def forward(self, x):
@@ -36,10 +45,11 @@ def build_loss(cfg):
     sig = inspect.signature(loss_cls.__init__).parameters
     loss_kwargs = {k: v for k, v in all_kwargs.items() if k in sig}
     loss_fn = UniversalLossWrapper(loss_cls(**loss_kwargs))
+    print(f"Loss: {loss_cls.__name__}  kwargs={loss_kwargs}")
     return loss_fn
 
 
-def train_lp(model, train_loader, val_loader, optimizer, scheduler, loss_fn, save_path, cfg):
+def train_lp(model, train_loader, val_loader, optimizer, scheduler, loss_fn, save_path, cfg, trial=None):
     best_score = float("inf")
     n_epoch = cfg.get("lp_epochs", 10)
     patience_counter = 0
@@ -89,6 +99,12 @@ def train_lp(model, train_loader, val_loader, optimizer, scheduler, loss_fn, sav
                 print(f"Early stopping at epoch {epoch+1} because patience {patience} is over")
                 break
     
+        #optuna pruning
+        if trial is not None:
+            trial.report(val_score, epoch)
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
+
     return model, best_score
 
 
@@ -127,5 +143,5 @@ def run_lp(file_name, timestamp, experiment_id):
         # save checkpoint + submission
         save_submission(model, cfg, test_loader, timestamp)
         mlflow.log_metric("best_val_score", best_score)  # add after the epoch loop in train_lp
-
+        print(f"End of training best_score={best_score}")
 
