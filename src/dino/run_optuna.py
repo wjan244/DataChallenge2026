@@ -72,7 +72,7 @@ def objective_cnn(trial, base_cfg, experiment_id):
                               num_workers=NUM_WORKERS, pin_memory=_PIN, persistent_workers=False)
 
     model = PatchCNN(dropout=cfg.get("patch_cnn_dropout", 0.3),
-                     use_cls=cfg.get("patch_use_cls", False)).to(DEVICE)
+                     use_cls=cfg.get("patch_use_cls", True)).to(DEVICE)
     loss_fn   = build_loss(cfg)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg["lp_lr"],
                                   weight_decay=cfg["lp_weight_decay"])

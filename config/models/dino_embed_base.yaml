@@ -1,0 +1,12 @@
+# Model
+model_name: "facebook/dinov3-vit7b16-pretrain-lvd1689m"
+type: dino_cnn
+embedding_dir: "embedding-vit16b+patches"
+save_fp16: true
+embed_batch_size: 32
+save_patches: true
+
+# Data
+n_bins: 30
+train_use_noisy: true
+val_use_noisy: true

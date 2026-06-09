@@ -38,7 +38,7 @@ Implemented in [src/metrics.py](src/metrics.py): `error_fn()` and `metric_fn()`.
 ## Code Architecture
 
 ```
-main.py                         # Runs the 3-stage pipeline, scratch, or CNN finetuning depending on config
+main.py                         # Runs the 3-stage pipeline, scratch, CNN finetuning, or DINOv3 pipeline
 test.py                         # Single-batch smoke test (monkey-patches DataLoader)
 
 src/
@@ -75,8 +75,12 @@ src/
                                 #   inject_linear_mlp_probing(): replaces model head
     lora.py                     # LoRALinear: frozen base + trainable low-rank A·B
     loss.py                     # WeightedMSELoss (nMSE), WeightedLiteMSELoss (nLiteMSE),
-                                #   PWGLoss (PGWLoss), PWGLossRegularized — gender-weighted losses
+                                #   PWGLoss, PWGLossRegularized, HuberPWGLossRegularized — gender-weighted losses
+                                #   CompoundLoss — meta-loss with exponent params gamma (iw), kappa (gw),
+                                #     alpha (gender disparity), beta (Huber delta); interpolates between
+                                #     PLoss (gamma=kappa=0) and full PWGHuber (gamma=kappa=1)
                                 #   PWScore — competition metric as nn.Module (used for val early stopping)
+                                #   PScore — like PWScore but uses only pi weights (no iw)
                                 #   UniversalLossWrapper — routes by loss_name string via LOSS_MAPPING
 
   pipeline/
@@ -107,9 +111,30 @@ config/
     vit_tiny_patch16_224_no_celeba.yaml  # Minimal run — skips CelebA stage
     cnn_4l.yaml                        # 4-layer ConvNet trained from scratch
     efficient_net.yaml                 # EfficientNetV2-S finetuned via CNN finetuning pipeline
+    dino.yaml                          # DINOv3 LP config (type: dino_lp)
+    dino_cnn.yaml                      # DINOv3 PatchCNN config (type: dino_cnn)
+  optuna/                        # Optuna result CSVs saved here per run
+
+src/dino/
+  embed.py                      # Step 1: extract DINOv3 embeddings → disk
+                                #   Saves {split}_cls.pt, {split}_patch_mean.pt,
+                                #   {split}_meta.csv, {split}_patches.bin (numpy memmap fp16)
+                                #   Noisy samples (validation_noisy.csv) always split 80/20
+                                #   and appended to both train and val
+  utils.py                      # Shared: EmbeddingDataset (LP), PatchDataset (CNN),
+                                #   compute_laplacian_iw(), eval_epoch / eval_epoch_cnn,
+                                #   eval_final_cnn (PScore without iw),
+                                #   save_submission / save_submission_cnn, load_config
+  run_lp.py                     # Linear probe on frozen embeddings: LinearProbe, train_lp,
+                                #   build_loss, run_lp
+  run_cnn.py                    # PatchCNN on full patch embeddings: PatchCNN, train_cnn,
+                                #   run_cnn; logs val_Pscore after training
+  run_optuna.py                 # Optuna search: objective_lp (discrete loss search),
+                                #   objective_cnn (CompoundLoss param search), run_optuna
 
 scripts/
   run_cluster.sbatch            # SLURM job script for cluster training
+  run_cluster_l_embed.sbatch    # SLURM job script for embedding extraction
   mean_norm.py                  # One-shot script: computes per-channel mean & std of the
                                 #   training set (averaged over batches); use the output to
                                 #   replace the ImageNet defaults in _get_transform() for
@@ -121,6 +146,8 @@ scripts/
 ## Pipelines
 
 `main.py` selects the pipeline based on the config:
+- `type: dino_lp` → DINOv3 linear probe (with Optuna if `optuna_n_trials` is set)
+- `type: dino_cnn` → DINOv3 PatchCNN (with Optuna if `optuna_n_trials` is set)
 - `scratch_training.run_execution: True` → scratch pipeline
 - `cnn_ft_training.run_execution: True` → CNN finetuning pipeline
 - otherwise → 3-stage transformer pipeline
@@ -157,6 +184,73 @@ Key config keys (under `cnn_ft_training`): `learning_rate`, `num_epoch_head`, `n
 Run everything: `python main.py`  
 Run scratch CNN: `python main.py --config cnn_4l.yaml`  
 Run CNN finetuning: `python main.py --config efficient_net.yaml`
+
+### DINOv3 Pipeline (frozen ViT-H+ backbone)
+
+Two-step pipeline: embed once, train many times.
+
+**Step 1 — Embedding extraction** (`src/dino/embed.py`):
+```bash
+python src/dino/embed.py --config dino_cnn.yaml
+# or on cluster:
+sbatch scripts/run_cluster_l_embed.sbatch
+```
+Loads `facebook/dinov3-vith16plus-pretrain-lvd1689m` (840M params, 1280-dim).
+Layout of `last_hidden_state`: `[CLS, reg×4, patch×196]` — `patch_start = 1 + n_reg` (read from `model.config.num_register_tokens`, not hardcoded).
+
+Saves per split to `data/{embedding_dir}/`:
+| File | Shape | Description |
+|------|-------|-------------|
+| `{split}_cls.pt` | `[N, 1280]` fp16 | CLS token |
+| `{split}_patch_mean.pt` | `[N, 1280]` fp16 | Mean of 196 patch tokens |
+| `{split}_meta.csv` | — | Row-aligned metadata (filename, FaceOcclusion, gender) |
+| `{split}_patches.bin` | `[N, 196, 1280]` fp16 | Full patch grid as numpy memmap (only when `save_patches: true`) |
+
+`validation_noisy.csv` (16 noisy-label samples) is always split 80/20 and appended to both train and val at embed time. At training time, inclusion is controlled by `train_use_noisy` / `val_use_noisy` flags in the config (default: `true`).
+
+**Step 2a — Linear Probe** (`type: dino_lp`):
+```bash
+python main.py --config dino.yaml
+```
+`EmbeddingDataset` loads CLS / patch_mean / concat (controlled by `lp_embedding`). `LinearProbe`: 2-layer MLP. `compute_laplacian_iw()` computes importance weights with Laplacian smoothing: `ratio = (test_dist + alpha/N) / (train_dist + alpha/N)`.
+
+**Step 2b — PatchCNN** (`type: dino_cnn`):
+```bash
+python main.py --config dino_cnn.yaml
+```
+`PatchDataset` lazily loads `{split}_patches.bin` via numpy memmap (no RAM accumulation). `__getitem__` remaps indices via `keep_idx` to handle noisy-sample filtering correctly.
+
+`PatchCNN` architecture — input `[B, 1280, 14, 14]`:
+```
+Conv2d(1280→512, 1×1) → GroupNorm → GELU    # channel reduction
+Conv2d(512→256, 3×3)  → GroupNorm → GELU    # spatial mixing 14×14
+Conv2d(256→64,  3×3)  → GroupNorm → GELU    # spatial mixing 14×14
+Conv2d(64→8,   3×3, stride=2) → GroupNorm → GELU   # downsample → 7×7
+Flatten → [B, 392]
+optional: CLS projected to 256-d and concatenated → [B, 648]
+Linear(392/648 → 256) → GELU → Dropout → Linear(256→64) → GELU → Dropout → Linear(64→1) → Sigmoid
+```
+After training, `eval_final_cnn` computes and logs `val_Pscore` — the competition score using only `pi` weights (no importance weighting), as a distribution-free reference.
+
+**Optuna hyperparameter search:**
+Uncomment `optuna_n_trials` / `optuna_epochs` / `optuna_patience` in the config to activate.
+- LP Optuna (`objective_lp`): searches over lr, hidden, dropout, weight_decay, loss type, smooth_alpha
+- CNN Optuna (`objective_cnn`): searches over lr, dropout, weight_decay, and all four `CompoundLoss` params (alpha, beta, gamma, kappa)
+Results saved to `config/optuna/{timestamp}_optuna_results.csv` and logged to MLflow.
+
+**Key config keys** (dino_cnn.yaml / dino.yaml):
+| Key | Description |
+|-----|-------------|
+| `type` | `dino_lp` or `dino_cnn` |
+| `embedding_dir` | Subfolder under `data/` where embeddings are stored |
+| `save_patches` | Whether embed.py saves the full patch memmap |
+| `lp_embedding` | `cls` / `patch_mean` / `concat` (LP only) |
+| `patch_use_cls` | Concatenate CLS projection to CNN features |
+| `train_use_noisy` / `val_use_noisy` | Include noisy samples in train/val at training time |
+| `smooth_alpha` | Laplacian smoothing strength for iw (count-based: alpha/N added per bin) |
+| `lp_loss` | Loss name — use `CompoundLoss` for CNN Optuna |
+| `lp_loss_alpha/beta/gamma/kappa` | CompoundLoss params |
+| `optuna_n_trials` | If set, routes to Optuna search instead of single run |
 
 ---
 

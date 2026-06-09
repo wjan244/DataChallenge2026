@@ -3,11 +3,14 @@ import numpy as np
 import pandas as pd
 
 import torch
+from PIL import Image
 from torch.utils.data import Dataset
+from torchvision.transforms import v2
 from src.data.data_utils import compute_gender_weights, N_BINS_GENDER
 from src.data.data_stats import get_test_distribution_from_screenshot, N_BINS
-from src.config import SCREENSHOT_PATH, DATA, DEVICE, SUBMISSION_DIR, CONFIG
-from src.models.loss import PWScore
+from src.data.transforms import get_augmentation_pretrained_transforms
+from src.config import SCREENSHOT_PATH, DATA, IMG_DIR, DEVICE, SUBMISSION_DIR, CONFIG
+from src.models.loss import PWScore, PScore
 
 
 def load_config(config_name="dino.yaml"):
@@ -129,6 +132,21 @@ def eval_epoch_cnn(model, loader, loss_fn):
     return val_score.item(), err_f.item(), err_m.item(), val_loss
 
 
+def eval_final_cnn(model, loader):
+    score_fn = PScore()
+    preds, ys, iws, pis, gws, genders = [], [], [], [], [], []
+    model.eval()
+    with torch.no_grad():
+        for emb, cls, y, gender, iw, pi, gw in loader:
+            pred = model(emb.to(DEVICE), cls.to(DEVICE)).squeeze(-1).cpu()
+            preds.append(pred); ys.append(y); iws.append(iw)
+            pis.append(pi); gws.append(gw); genders.append(gender)
+
+    p, y, iw, pi, gw, g = (torch.cat(x) for x in [preds, ys, iws, pis, gws, genders])
+    
+    val_score = score_fn(p, y, iw, pi, g)
+
+    return val_score.item()
 
 def save_submission(model, cfg, loader, timestamp, split="test"):
     emb_dir = DATA / cfg["embedding_dir"]

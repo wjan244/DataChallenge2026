@@ -6,6 +6,7 @@ embedding_dir: "embedding-vit16h+patches"
 
 # Data
 n_bins: 20
+patch_use_cls: true
 smooth_alpha: 50        # count-based: alpha/n_samples added to each bin
 train_use_noisy: true
 val_use_noisy: true

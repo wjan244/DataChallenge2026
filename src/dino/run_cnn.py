@@ -3,14 +3,14 @@ import mlflow
 import time
 import optuna
 import torch.nn as nn
-import torch.functional as F
+import torch.nn.functional as F
 
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
 from src.config import DEVICE, CHECKPOINT_DIR, NUM_WORKERS
 from src.dino.run_lp import build_loss
-from src.dino.utils import load_config, PatchDataset, save_submission_cnn, eval_epoch_cnn
+from src.dino.utils import load_config, PatchDataset, save_submission_cnn, eval_epoch_cnn, eval_final_cnn
 
 _PIN = DEVICE.type == "cuda"
 _PW  = NUM_WORKERS > 0
@@ -34,36 +34,32 @@ class PatchCNN(nn.Module):
             nn.GELU(),
 
             # Stage 3: spatial mixing, keep 16×16
-            nn.Conv2d(256, 128, 3, padding=1, bias=False),
-            nn.GroupNorm(1, 128),
-            nn.GELU(),
-
-            # Stage 4: downsample to 8×8
-            nn.Conv2d(128, 64, 3, stride=2, padding=1, bias=False),
+            nn.Conv2d(256, 64, 3, padding=1, bias=False),
             nn.GroupNorm(1, 64),
             nn.GELU(),
 
-            # Stage 5: refine at 8×8
-            nn.Conv2d(64, 32, 3, padding=1, bias=False),
-            nn.GroupNorm(1, 32),
+            # Stage 4: downsample 14→7
+            nn.Conv2d(64, 8, 3, stride=1, padding=1, bias=False),
+            nn.GroupNorm(1, 8),
             nn.GELU(),
+
         )
-        # Flatten 32×8×8 = 2048 — MLP sees all spatial positions
-        conv_out_dim = 32 * 8 * 8   # 2048
+        # Flatten 32×7×7 = 1568 — stride-2 on 14×14 gives 7×7
+        conv_out_dim = 8 * 14 * 14   # 392
 
         cls_out_dim = 512 if use_cls else 0
         self.cls_proj = nn.Linear(patch_dim, cls_out_dim) if use_cls else None
 
-        head_in = conv_out_dim + cls_out_dim  # 2048 + 512 = 2560
+        head_in = conv_out_dim + cls_out_dim  # 520 = 520
 
         self.head = nn.Sequential(
-            nn.Linear(head_in, 512),
+            nn.Linear(head_in, 256),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(512, 64),
+            nn.Linear(256, 128),
             nn.GELU(),
-            nn.Dropout(dropout / 2),
-            nn.Linear(64, 1),
+            nn.Dropout(dropout),
+            nn.Linear(128, 1),
             nn.Sigmoid()
         )
 
@@ -92,8 +88,8 @@ class PatchCNN(nn.Module):
                     
                 
     def forward(self, x, cls=None):
-        feat = self.conv(x)       # [B, 32, 8, 8]
-        feat = feat.flatten(1)    # [B, 2048] — MLP sees full spatial map
+        feat = self.conv(x)       # [B, 32, 7, 7]
+        feat = feat.flatten(1)    # [B, 1568]
 
         if self.use_cls and cls is not None:
             cls_feat = F.gelu(self.cls_proj(cls))       # [B, 512]
@@ -175,7 +171,7 @@ def run_cnn(file_name, timestamp, experiment_id):
     
     # model
     model = PatchCNN(dropout=cfg.get("patch_cnn_dropout", 0.3), 
-                     use_cls=cfg.get("patch_use_cls", False)).to(DEVICE)
+                     use_cls=cfg.get("patch_use_cls", True)).to(DEVICE)
     
     # loss
     loss_fn = build_loss(cfg)
@@ -193,6 +189,11 @@ def run_cnn(file_name, timestamp, experiment_id):
         mlflow.log_params(cfg)
         # training loop with early stopping
         model, best_score = train_cnn(model, train_loader, val_loader, optimizer, scheduler, loss_fn, save_path, cfg)
+        
+        # save score without wi
+        pscore = eval_final_cnn(model, val_loader)
+        mlflow.log_metrics({"val_Pscore": pscore})
+                
         # save checkpoint + submission
         save_submission_cnn(model, cfg, test_loader, timestamp)
         mlflow.log_metric("best_val_score", best_score)  # add after the epoch loop in train_lp

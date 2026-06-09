@@ -133,7 +133,11 @@ class CompoundLoss(nn.Module):
         g  = gender.view(-1)
         mask_f = g == 0.0
         mask_m = g == 1.0
-        
+    
+        # print(f"mean gw for females: {gw[mask_f].mean():.3f}")
+        # print(f"mean gw for males:   {gw[mask_m].mean():.3f}")
+        # print(f"mean/std iw:   {iw.mean():.3f} | {iw.std():.3f}")
+    
         # Guard against empty gender groups
         # if mask_f.sum() == 0 or mask_m.sum() == 0:
         #     return self.HuberLoss(y_true, y_pred, w)
@@ -171,6 +175,20 @@ class PWScore(nn.Module):
         err_f = torch.sum(w[mask_f] * se[mask_f]) / (torch.sum(w[mask_f]) + EPS)
         err_m = torch.sum(w[mask_m] * se[mask_m]) / (torch.sum(w[mask_m]) + EPS)
         return (err_f + err_m) / 2 + torch.abs(err_f - err_m), err_f, err_m
+    
+class PScore(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, y_pred, y_true, iw, pi, gender):
+        w  = (pi).view(-1)
+        se = ((y_true - y_pred) ** 2).view(-1)
+        g  = gender.view(-1)
+        mask_f = g == 0.0
+        mask_m = g == 1.0
+        err_f = torch.sum(w[mask_f] * se[mask_f]) / (torch.sum(w[mask_f]) + EPS)
+        err_m = torch.sum(w[mask_m] * se[mask_m]) / (torch.sum(w[mask_m]) + EPS)
+        return (err_f + err_m) / 2 + torch.abs(err_f - err_m)
     
     
 LOSS_MAPPING = {

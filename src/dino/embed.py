@@ -53,7 +53,7 @@ def save_split(cls, patch_mean, df, emb_dir, split, fp16):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="dino_cnn.yaml",
+    parser.add_argument("--config", default="dino_embed_base.yaml",
                         help="YAML filename inside config/models/")
     args = parser.parse_args()
     
@@ -86,7 +86,7 @@ def main():
     fp16 = cfg.get("save_fp16", False)
     save_patches = cfg.get("save_patches", False)
 
-    for split, df in [("val", df_val), ("test", df_test)]: #[("train", df_train), ("val", df_val), ("test", df_test)]:
+    for split, df in [("train", df_train), ("val", df_val), ("test", df_test)]:
         print(f"\nExtracting {split} ({len(df)} images)...")
         cls, patch_mean = extract_embeddings(model, processor, df, n_reg, batch_size, save_patches=save_patches, patches_path=emb_dir / f"{split}_patches.bin")
         save_split(cls, patch_mean, df, emb_dir, split, fp16)
