@@ -1,8 +1,8 @@
 # Model
-model_name: "facebook/dinov3-vitb16-pretrain-lvd1689m"
+model_name: "facebook/dinov3-vith16plus-pretrain-lvd1689m"
 type: dino_cnn
-embedding_dir: "embedding-vitb16+patches"
-embed_dim: 768
+embedding_dir: "embedding-vit16h+patches"
+embed_dim: 1280
 save_fp16: true
 embed_batch_size: 32
 save_patches: true
@@ -14,16 +14,16 @@ val_use_noisy: true
 
 # CNN
 patch_use_cls: true
-smooth_alpha: 5        
+smooth_alpha: 20        
 lp_lr: 1.0e-3
-lp_weight_decay: 1.0e-3
+lp_weight_decay: 1.0e-4
 lp_epochs: 100
-lp_batch_size: 2048
+lp_batch_size: 1024
 lp_loss: "CompoundLoss"
 lp_loss_alpha: 1.0    
 lp_loss_beta: 0.1    
 lp_loss_gamma: 1.0    
-lp_loss_kappa: 0.0    
+lp_loss_kappa: 1.0    
 lp_patience: 5
 lp_dropout: 0.2
 

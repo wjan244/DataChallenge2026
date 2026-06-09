@@ -24,7 +24,7 @@ def compute_laplacian_iw(df,  n_bins=N_BINS, alpha=50):
     train_hist = (train_hist) / train_hist.sum()
     test_dist = get_test_distribution_from_screenshot(SCREENSHOT_PATH,n_bins=n_bins)
     
-    ratio_dist = (test_dist+alpha/n_ech)/(train_hist+alpha/n_ech)
+    ratio_dist = (test_dist+alpha/n_ech)/(1e-6+train_hist+alpha/n_ech)
     
     y = df["FaceOcclusion"].values
     bin_idx = np.digitize(y, bins) -1 # for zero index
@@ -206,9 +206,11 @@ class PatchDataset(Dataset):
         else:
             keep_idx = list(range(len(self.meta)))
         
+        embed_dim = cfg.get("embed_dim", 1280)
+        self.embed_dim = embed_dim
         patches_raw = np.memmap(emb_dir / f"{split}_patches.bin",
                                 dtype=np.float16, mode='r',
-                                shape=(N_orig, 196, 1280))
+                                shape=(N_orig, 196, embed_dim))
         self.keep_idx = keep_idx  # store for __getitem__
         self._patches_raw = patches_raw  # keep reference alive
    
@@ -242,7 +244,71 @@ class PatchDataset(Dataset):
     
     def __getitem__(self, idx):
         orig_idx = self.keep_idx[idx]
-        x = torch.from_numpy(self._patches_raw[orig_idx].copy()).float().reshape(1280, 14, 14)
-        cls = self.cls[idx].float() if self.cls is not None else torch.zeros(1280)
+        x = torch.from_numpy(self._patches_raw[orig_idx].copy()).float().reshape(self.embed_dim, 14, 14)
+        cls = self.cls[idx].float() if self.cls is not None else torch.zeros(self.embed_dim)
 
         return x, cls, self.labels[idx], self.genders[idx], self.iws[idx], self.pis[idx], self.gws[idx]
+
+
+class ImageDataset(Dataset):
+    """Loads raw images from IMG_DIR using the same split/noisy/iw logic as EmbeddingDataset.
+    Reads {split}_meta.csv from the embedding_dir so the train/val split is identical to LP/CNN runs.
+    The base_transform (normalization) is passed in from outside; augmentation is composed on top.
+    """
+    def __init__(self, split: str, cfg: dict, transform, augment: bool = False):
+        emb_dir = DATA / cfg["embedding_dir"]
+        self.meta = pd.read_csv(emb_dir / f"{split}_meta.csv")
+
+        # same noisy filtering as EmbeddingDataset
+        noisy = pd.read_csv(DATA / "occlusion_datasets" / "validation_noisy.csv")
+        noisy_files = set(noisy["filename"])
+        mask = self.meta["filename"].isin(noisy_files)
+        if (split == "val"   and not cfg.get("val_use_noisy",   True)) or \
+           (split == "train" and not cfg.get("train_use_noisy", True)):
+            self.meta = self.meta[~mask].reset_index(drop=True)
+
+        self.filenames = self.meta["filename"].tolist()
+        n = len(self.meta)
+
+        if split != "test":
+            self.labels  = torch.tensor(self.meta["FaceOcclusion"].values, dtype=torch.float32)
+            self.genders = torch.tensor(self.meta["gender"].values,        dtype=torch.float32)
+            self.iws     = torch.tensor(compute_laplacian_iw(self.meta, cfg["n_bins"], cfg["smooth_alpha"]), dtype=torch.float32)
+            self.pis     = 1/30 + self.labels
+            W_F, W_M     = compute_gender_weights(self.labels, self.genders)
+            bins_gender  = torch.linspace(0, 1, N_BINS_GENDER + 1)
+            bin_idx      = (torch.bucketize(self.labels, bins_gender, right=False) - 1).clamp(0, N_BINS_GENDER - 1)
+            self.gws     = torch.where(self.genders == 0.0, W_F[bin_idx], W_M[bin_idx])
+        else:
+            self.labels  = torch.zeros(n)
+            self.genders = torch.full((n,), -1.0)
+            self.iws = self.pis = self.gws = torch.ones(n)
+
+        if split == "train": #only if train!
+            aug = get_augmentation_pretrained_transforms() if augment else None
+            self.transform = v2.Compose([transform, aug]) if aug else transform
+
+    def __len__(self):
+        return len(self.filenames)
+
+    def __getitem__(self, idx):
+        img = Image.open(IMG_DIR / self.filenames[idx]).convert("RGB")
+        return (self.transform(img), self.labels[idx], self.genders[idx],
+                self.iws[idx], self.pis[idx], self.gws[idx])
+
+
+def eval_epoch_image(model, loader, loss_fn):
+    """Same as eval_epoch but for image loaders: calls model(img) instead of model(emb)."""
+    score_fn = PWScore()
+    preds, ys, iws, pis, gws, genders = [], [], [], [], [], []
+    model.eval()
+    with torch.no_grad():
+        for img, y, gender, iw, pi, gw in loader:
+            pred = model(img.to(DEVICE)).squeeze(-1).cpu()
+            preds.append(pred); ys.append(y); iws.append(iw)
+            pis.append(pi); gws.append(gw); genders.append(gender)
+
+    p, y, iw, pi, gw, g = (torch.cat(x) for x in [preds, ys, iws, pis, gws, genders])
+    val_score, err_f, err_m = score_fn(p, y, iw, pi, g)
+    val_loss = loss_fn(p, y, iw, pi, gw, g).item()
+    return val_score.item(), err_f.item(), err_m.item(), val_loss

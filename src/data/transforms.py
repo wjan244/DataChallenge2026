@@ -17,12 +17,24 @@ def get_augmentation_pretrained_transforms()->None:
     #     v2.Identity()
     #     ])
     #     ])
+    # return v2.Compose([
+    #     v2.RandomHorizontalFlip(p=0.5),
+    #     v2.RandomApply([v2.RandomRotation(degrees=15)], p=0.3),
+    #     v2.RandomApply([v2.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2)], p=0.5),
+    #     v2.RandomGrayscale(p=0.05),
+    #     v2.RandomApply([v2.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0))], p=0.3),
+    # ])
+    
     return v2.Compose([
         v2.RandomHorizontalFlip(p=0.5),
         v2.RandomApply([v2.RandomRotation(degrees=15)], p=0.3),
-        v2.RandomApply([v2.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2)], p=0.5),
-        v2.RandomGrayscale(p=0.05),
-        v2.RandomApply([v2.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0))], p=0.3),
+        v2.RandomApply([v2.ColorJitter(
+            brightness=0.3, contrast=0.3, saturation=0.2, hue=0.05
+        )], p=0.5),
+        v2.RandomGrayscale(p=0.15),              # up from 0.05
+        v2.RandomApply([v2.GaussianBlur(
+            kernel_size=3, sigma=(0.1, 1.0)      # reduced sigma max
+        )], p=0.1)
     ])
 
 def get_augmentation_finetuning_transforms()->None:

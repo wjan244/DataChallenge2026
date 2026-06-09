@@ -24,14 +24,14 @@ class PatchCNN(nn.Module):
 
         self.conv = nn.Sequential(
             # Stage 1: channel reduction, no spatial mixing
-            nn.Conv2d(patch_dim, 512, 1, bias=False),
-            nn.GroupNorm(1, 512),
-            nn.GELU(),
-
-            # Stage 2: spatial mixing, keep 16×16
-            nn.Conv2d(512, 256, 3, padding=1, bias=False),
+            nn.Conv2d(patch_dim, 256, 1, bias=False),
             nn.GroupNorm(1, 256),
             nn.GELU(),
+
+            # # Stage 2: spatial mixing, keep 16×16
+            # nn.Conv2d(512, 256, 3, padding=1, bias=False),
+            # nn.GroupNorm(1, 256),
+            # nn.GELU(),
 
             # Stage 3: spatial mixing, keep 16×16
             nn.Conv2d(256, 64, 3, padding=1, bias=False),
@@ -39,26 +39,26 @@ class PatchCNN(nn.Module):
             nn.GELU(),
 
             # Stage 4: downsample 14→7
-            nn.Conv2d(64, 8, 3, stride=1, padding=1, bias=False),
+            nn.Conv2d(64, 8, 3, stride=2, padding=1, bias=False),
             nn.GroupNorm(1, 8),
             nn.GELU(),
 
         )
         # Flatten 32×7×7 = 1568 — stride-2 on 14×14 gives 7×7
-        conv_out_dim = 8 * 14 * 14   # 392
+        conv_out_dim = 8 * 7 * 7   # 392
 
-        cls_out_dim = 512 if use_cls else 0
+        cls_out_dim = 128 if use_cls else 0
         self.cls_proj = nn.Linear(patch_dim, cls_out_dim) if use_cls else None
 
         head_in = conv_out_dim + cls_out_dim  # 520 = 520
 
         self.head = nn.Sequential(
-            nn.Linear(head_in, 256),
+            nn.Linear(head_in, 128),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(256, 128),
-            nn.GELU(),
-            nn.Dropout(dropout),
+            # nn.Linear(512, 128),
+            # nn.GELU(),
+            # nn.Dropout(dropout),
             nn.Linear(128, 1),
             nn.Sigmoid()
         )
@@ -170,7 +170,8 @@ def run_cnn(file_name, timestamp, experiment_id):
     test_loader = DataLoader(PatchDataset("test", cfg), batch_size=cfg["lp_batch_size"], num_workers=NUM_WORKERS, pin_memory=_PIN, persistent_workers=_PW)
     
     # model
-    model = PatchCNN(dropout=cfg.get("patch_cnn_dropout", 0.3), 
+    model = PatchCNN(patch_dim=cfg.get("embed_dim", 1280),
+                     dropout=cfg.get("patch_cnn_dropout", 0.3),
                      use_cls=cfg.get("patch_use_cls", True)).to(DEVICE)
     
     # loss
