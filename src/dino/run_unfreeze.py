@@ -1,0 +1,221 @@
+import math
+import time
+import mlflow
+import torch
+import torch.nn as nn
+import pandas as pd
+
+from tqdm import tqdm
+from torch.utils.data import DataLoader
+from torch.nn.utils import clip_grad_norm_
+from torchvision.transforms import v2
+from transformers import AutoModel, AutoImageProcessor
+
+from src.config import DEVICE, CHECKPOINT_DIR, NUM_WORKERS, SUBMISSION_DIR, DATA
+from src.dino.run_lp import build_loss
+from src.dino.run_cnn import PatchCNN
+from src.dino.utils import load_config, ImageDataset, eval_epoch_image
+
+_PIN = DEVICE.type == "cuda"
+_PW  = NUM_WORKERS > 0
+
+class DinoFinetuneModel(nn.Module):
+    def __init__(self, backbone, head: PatchCNN):
+        super().__init__()
+        self.backbone    = backbone
+        self.head        = head
+        n_reg            = getattr(backbone.config, "num_register_tokens", 0)
+        self.patch_start = 1 + n_reg   # skip CLS + register tokens
+
+    def forward(self, pixel_values):
+        h       = self.backbone(pixel_values=pixel_values).last_hidden_state
+        cls     = h[:, 0]                        # [B, D]
+        patches = h[:, self.patch_start:]        # [B, 196, D]  — skips registers
+        B, N, D = patches.shape
+        grid    = patches.reshape(B, 14, 14, D).permute(0, 3, 1, 2)
+        return self.head(grid, cls)
+    
+
+def build_dino_ft_model(cfg) -> DinoFinetuneModel:
+    backbone = AutoModel.from_pretrained(cfg["model_name"])
+    for p in backbone.parameters():
+        p.requires_grad = False
+
+    D    = backbone.config.hidden_size
+    head = PatchCNN(patch_dim=D, dropout=cfg["lp_dropout"], use_cls=True)
+    head.load_state_dict(torch.load(cfg["head_checkpoint"], map_location="cpu"))
+    print(f"Head loaded from {cfg['head_checkpoint']}")
+
+    n = cfg["n_blocks"]
+    for layer in backbone.encoder.layer[-n:]:
+        for p in layer.parameters():
+            p.requires_grad = True
+    for p in backbone.layernorm.parameters():
+        p.requires_grad = True
+
+    return DinoFinetuneModel(backbone, head)
+
+    
+def train_unfreeze(model, train_loader, val_loader, optimizer, scheduler, loss_fn, save_path, cfg):
+    n_epoch  = cfg.get("lp_epochs", 30)
+    patience = cfg.get("lp_patience", 5)
+    best_score, patience_ctr = float("inf"), 0
+
+    for epoch in range(n_epoch):
+        t0 = time.time()
+        model.train()
+        running_loss, bb_norm, hd_norm = 0.0, 0.0, 0.0
+
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{n_epoch}")
+        for img, y, gender, iw, pi, gw in pbar:
+            img, y, gender = img.to(DEVICE), y.to(DEVICE), gender.to(DEVICE)
+            iw, pi, gw     = iw.to(DEVICE),  pi.to(DEVICE),  gw.to(DEVICE)
+
+            optimizer.zero_grad()
+            pred = model(img).squeeze(-1)
+            loss = loss_fn(pred, y, iw, pi, gw, gender)
+            loss.backward()
+
+            bb_norm += clip_grad_norm_(
+                [p for p in model.backbone.parameters() if p.requires_grad], 1.0
+            ).item()
+            hd_norm += clip_grad_norm_(model.head.parameters(), 1.0).item()
+
+            optimizer.step()
+            running_loss += loss.item()
+            pbar.set_postfix(loss=f"{loss.item():.4f}")
+
+        scheduler.step()
+        n_b = len(train_loader)
+        val_score, err_f, err_m, val_loss = eval_epoch_image(model, val_loader, loss_fn)
+
+        mlflow.log_metrics({
+            "train_loss":         running_loss / n_b,
+            "val_loss":           val_loss,
+            "val_score":          val_score,
+            "val_err_female":     err_f,
+            "val_err_male":       err_m,
+            "grad_norm_backbone": bb_norm / n_b,
+            "grad_norm_head":     hd_norm / n_b,
+            "lr_head":            optimizer.param_groups[0]["lr"],
+            "lr_backbone":        optimizer.param_groups[1]["lr"],
+            "epoch_time_s":       time.time() - t0,
+        }, step=epoch)
+        print(f"[{epoch+1}/{n_epoch}] val_score={val_score:.4f}  err_f={err_f:.4f}  err_m={err_m:.4f}")
+
+        if val_score < best_score:
+            best_score, patience_ctr = val_score, 0
+            torch.save(model.state_dict(), save_path)
+        else:
+            patience_ctr += 1
+            if patience_ctr >= patience:
+                print(f"Early stop at epoch {epoch+1}")
+                break
+
+    model.load_state_dict(torch.load(save_path, map_location="cpu"))
+    return model, best_score
+
+def save_submission_unfreeze(model, cfg, test_loader, val_noisy_loader, timestamp, loss_fn):
+    emb_dir = DATA / cfg["embedding_dir"]
+    name    = cfg.get("name", cfg["embedding_dir"])
+
+    # --- test submission ---
+    model.eval()
+    preds = []
+    with torch.no_grad():
+        for batch in test_loader:
+            pred = model(batch[0].to(DEVICE)).squeeze(-1).cpu()
+            preds.append(pred)
+
+    out = SUBMISSION_DIR / f"{timestamp}_{name}_unfreeze" / "test.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df = pd.read_csv(emb_dir / "test_meta.csv")
+    df["FaceOcclusion"] = torch.cat(preds).numpy()
+    df["gender"] = "x"
+    df[["filename", "FaceOcclusion", "gender"]].to_csv(out, index=False)
+    print(f"Test submission saved → {out}  ({len(df)} rows)")
+
+    # --- val with noisy: score + save ---
+    val_score, err_f, err_m, val_loss = eval_epoch_image(model, val_noisy_loader, loss_fn)
+    mlflow.log_metrics({
+        "final_val_score_noisy": val_score,
+        "final_val_err_female_noisy": err_f,
+        "final_val_err_male_noisy": err_m,
+    })
+    print(f"Val (with noisy): score={val_score:.4f}  err_f={err_f:.4f}  err_m={err_m:.4f}")
+
+
+
+def _build_image_transform(model_name: str):
+    processor = AutoImageProcessor.from_pretrained(model_name)
+    return v2.Compose([
+        v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=processor.image_mean, std=processor.image_std),
+    ])
+    
+def _build_optimizer(model: DinoFinetuneModel, cfg: dict):
+    n = cfg["n_blocks"]
+    backbone_params = []
+    for layer in model.backbone.encoder.layer[-n:]:
+        backbone_params.extend(layer.parameters())
+    backbone_params.extend(model.backbone.layernorm.parameters())
+
+    return torch.optim.AdamW([
+        {"params": list(model.head.parameters()), "lr": cfg["learning_rate_head"],     "weight_decay": cfg["weight_decay"]},
+        {"params": backbone_params,               "lr": cfg["learning_rate_backbone"], "weight_decay": cfg["weight_decay"]},
+    ])
+    
+    
+def _make_scheduler(optimizer, warmup_epochs: int, total_epochs: int):
+    def head_lambda(epoch):
+        return 0.5 * (1.0 + math.cos(math.pi * epoch / max(1, total_epochs)))
+
+    def backbone_lambda(epoch):
+        if warmup_epochs > 0 and epoch < warmup_epochs:
+            return (epoch + 1) / warmup_epochs
+        e = epoch - warmup_epochs
+        n = max(1, total_epochs - warmup_epochs)
+        return 0.5 * (1.0 + math.cos(math.pi * e / n))
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=[head_lambda, backbone_lambda])
+
+
+
+def run_unfreeze(file_name, timestamp, experiment_id):
+    cfg       = load_config(file_name)
+    n_epoch   = cfg.get("lp_epochs", 30)
+    bs        = cfg["lp_batch_size"]
+    transform = _build_image_transform(cfg["model_name"])
+
+    train_ds     = ImageDataset("train", cfg,                              transform=transform, augment=cfg.get("augmentation", True))
+    val_ds       = ImageDataset("val",   {**cfg, "val_use_noisy": False},  transform=transform, augment=False)
+    val_noisy_ds = ImageDataset("val",   {**cfg, "val_use_noisy": True},   transform=transform, augment=False)
+    test_ds      = ImageDataset("test",  cfg,                              transform=transform, augment=False)
+
+    kw = dict(num_workers=NUM_WORKERS, pin_memory=_PIN, persistent_workers=_PW)
+    train_loader     = DataLoader(train_ds,     batch_size=bs, shuffle=True,  **kw)
+    val_loader       = DataLoader(val_ds,       batch_size=bs, shuffle=False, **kw)
+    val_noisy_loader = DataLoader(val_noisy_ds, batch_size=bs, shuffle=False, **kw)
+    test_loader      = DataLoader(test_ds,      batch_size=bs, shuffle=False, **kw)
+
+    loss_fn   = build_loss(cfg)
+    model     = build_dino_ft_model(cfg).to(DEVICE)
+    optimizer = _build_optimizer(model, cfg)
+    scheduler = _make_scheduler(optimizer, cfg.get("warmup_epochs", 0), n_epoch)
+    save_path = CHECKPOINT_DIR / f"{timestamp}_dino_unfreeze.pt"
+
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total     = sum(p.numel() for p in model.parameters())
+    print(f"Trainable params: {trainable:,} / {total:,}")
+
+    with mlflow.start_run(experiment_id=experiment_id, run_name=f"dino_unfreeze_{timestamp}"):
+        mlflow.log_params({k: v for k, v in cfg.items() if not isinstance(v, (dict, list))})
+        mlflow.log_params({"trainable_params": trainable})
+
+        model, best_score = train_unfreeze(
+            model, train_loader, val_loader, optimizer, scheduler, loss_fn, save_path, cfg
+        )
+        save_submission_unfreeze(model, cfg, test_loader, val_noisy_loader, timestamp, loss_fn)
+        mlflow.log_metric("best_val_score", best_score)
+        print(f"Done. best_val_score={best_score:.4f}")

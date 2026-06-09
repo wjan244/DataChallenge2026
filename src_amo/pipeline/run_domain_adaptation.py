@@ -1,10 +1,10 @@
 import mlflow
 
-from src.pipeline.evaluation import run_evaluation
-from src.config import *
+from src_amo.pipeline.evaluation import run_evaluation
+from src_amo.config import *
 
-from src.data.data_loader import*
-from src.pipeline.train import run_train
+from src_amo.data.data_loader import*
+from src_amo.pipeline.train import run_train
 
 
 

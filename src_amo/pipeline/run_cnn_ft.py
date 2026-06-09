@@ -8,14 +8,14 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
-from src.pipeline.evaluation import run_evaluation
-from src.config import *
-from src.data.data_loader import *
-from src.pipeline.test import run_test, save_split_predictions
-from src.models.models import OcclusionModel
-from src.models.finetuning import inject_linear_mlp_probing
-from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
-from src.data.data_utils import get_challenge_split
+from src_amo.pipeline.evaluation import run_evaluation
+from src_amo.config import *
+from src_amo.data.data_loader import *
+from src_amo.pipeline.test import run_test, save_split_predictions
+from src_amo.models.models import OcclusionModel
+from src_amo.models.finetuning import inject_linear_mlp_probing
+from src_amo.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
+from src_amo.data.data_utils import get_challenge_split
 import timm
 
 LOSS_MAPPING = {"MSE": nn.MSELoss, "BCE": nn.BCELoss, "nMSE": WeightedMSELoss, "nLiteMSE": WeightedLiteMSELoss}

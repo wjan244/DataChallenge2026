@@ -4,9 +4,9 @@ import pandas as pd
 from scipy.stats import entropy
 from sklearn.model_selection import train_test_split
 from PIL import Image
-from src.config import*
-from src.config_utils import load_config
-from src.data.data_stats import distribution_adaptation_reweight, get_test_distribution_from_screenshot
+from src_amo.config import*
+from src_amo.config_utils import load_config
+from src_amo.data.data_stats import distribution_adaptation_reweight, get_test_distribution_from_screenshot
 
 
 cfg_glob = load_config(CONFIG_DEFAULT).get("globaux", {})

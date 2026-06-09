@@ -1,6 +1,7 @@
 import yaml
 import numpy as np
 import pandas as pd
+import mlflow
 
 import torch
 from PIL import Image
@@ -16,19 +17,19 @@ from src.models.loss import PWScore, PScore
 def load_config(config_name="dino.yaml"):
     return yaml.safe_load(open(CONFIG / "models" / config_name))
 
-def compute_laplacian_iw(df,  n_bins=N_BINS, alpha=50):
-    bins = np.linspace(0, 1, n_bins+1)
+def compute_laplacian_iw(df, alpha=50):
+    bins = np.linspace(0, 1, N_BINS+1)
     # alpha = 1/n_bins if alpha == -1 else alpha
     n_ech = len(df)
     train_hist, _ = np.histogram(df["FaceOcclusion"], bins=bins)
     train_hist = (train_hist) / train_hist.sum()
-    test_dist = get_test_distribution_from_screenshot(SCREENSHOT_PATH,n_bins=n_bins)
+    test_dist = get_test_distribution_from_screenshot(SCREENSHOT_PATH,n_bins=N_BINS)
     
     ratio_dist = (test_dist+alpha/n_ech)/(1e-6+train_hist+alpha/n_ech)
     
     y = df["FaceOcclusion"].values
     bin_idx = np.digitize(y, bins) -1 # for zero index
-    bin_idx = np.clip(bin_idx,0, n_bins - 1)
+    bin_idx = np.clip(bin_idx,0, N_BINS - 1)
     iw = ratio_dist[bin_idx] # no need to clip with smoothing .clip(0.05, 10) # to avoid extreme values
 
     return iw
@@ -72,7 +73,7 @@ class EmbeddingDataset(Dataset):
         if split != "test":
             self.labels  = torch.tensor(self.meta["FaceOcclusion"].values, dtype=torch.float32)
             self.genders = torch.tensor(self.meta["gender"].values,        dtype=torch.float32)
-            self.iws     = torch.tensor(compute_laplacian_iw(self.meta, cfg["n_bins"], cfg["smooth_alpha"]), dtype=torch.float32)
+            self.iws     = torch.tensor(compute_laplacian_iw(self.meta, cfg["smooth_alpha"]), dtype=torch.float32)
             self.pis     = 1/30 + self.labels
             W_F, W_M    = compute_gender_weights(self.labels, self.genders)
             bins_gender = torch.linspace(0, 1, N_BINS_GENDER + 1)
@@ -225,7 +226,7 @@ class PatchDataset(Dataset):
         if split != "test":
             self.labels  = torch.tensor(self.meta["FaceOcclusion"].values, dtype=torch.float32)
             self.genders = torch.tensor(self.meta["gender"].values,        dtype=torch.float32)
-            self.iws     = torch.tensor(compute_laplacian_iw(self.meta, cfg["n_bins"], cfg["smooth_alpha"]), dtype=torch.float32)
+            self.iws     = torch.tensor(compute_laplacian_iw(self.meta, cfg["smooth_alpha"]), dtype=torch.float32)
             self.pis     = 1/30 + self.labels
             W_F, W_M    = compute_gender_weights(self.labels, self.genders)
             bins_gender = torch.linspace(0, 1, N_BINS_GENDER + 1)
@@ -273,7 +274,7 @@ class ImageDataset(Dataset):
         if split != "test":
             self.labels  = torch.tensor(self.meta["FaceOcclusion"].values, dtype=torch.float32)
             self.genders = torch.tensor(self.meta["gender"].values,        dtype=torch.float32)
-            self.iws     = torch.tensor(compute_laplacian_iw(self.meta, cfg["n_bins"], cfg["smooth_alpha"]), dtype=torch.float32)
+            self.iws     = torch.tensor(compute_laplacian_iw(self.meta, cfg["smooth_alpha"]), dtype=torch.float32)
             self.pis     = 1/30 + self.labels
             W_F, W_M     = compute_gender_weights(self.labels, self.genders)
             bins_gender  = torch.linspace(0, 1, N_BINS_GENDER + 1)
@@ -284,9 +285,8 @@ class ImageDataset(Dataset):
             self.genders = torch.full((n,), -1.0)
             self.iws = self.pis = self.gws = torch.ones(n)
 
-        if split == "train": #only if train!
-            aug = get_augmentation_pretrained_transforms() if augment else None
-            self.transform = v2.Compose([transform, aug]) if aug else transform
+        aug = get_augmentation_pretrained_transforms() if (augment and split == "train") else None
+        self.transform = v2.Compose([transform, aug]) if aug else transform
 
     def __len__(self):
         return len(self.filenames)

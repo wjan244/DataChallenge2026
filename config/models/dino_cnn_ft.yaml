@@ -1,32 +1,34 @@
 # Model
 model_name: "facebook/dinov3-vitb16-pretrain-lvd1689m"
-type: dino_lp
+type: dino_unfreeze
 embedding_dir: "embedding-vitb16+patches"
-save_fp16: True
-embed_batch_size: 256
-save_patches: true
-
+embed_dim: 768
 # Data
-n_bins: 20
-val_use_noisy: true
 train_use_noisy: true
+augmentation: true
+smooth_alpha: 0       
 
-# Linear probe
-
-smooth_alpha: 0        # count-based: alpha/n_samples added to each bin
-lp_embedding: "concat"  # "cls" | "patch_mean" | "concat"
-lp_hidden: 128          # 0 = plain linear
-lp_lr: 1.0e-3
-lp_weight_decay: 1.0e-4
-lp_epochs: 100
-lp_batch_size: 2048
+# CNN
+head_checkpoint: checkpoints/selected/dino_cnn_2026-06-09_20-48-20_best_exp_pad_v3.pt
 lp_loss: "CompoundLoss"
 lp_loss_alpha: 1.0    
 lp_loss_beta: 0.1    
 lp_loss_gamma: 1.0    
 lp_loss_kappa: 1.0  
-lp_patience: 5
 lp_dropout: 0.2
+     
+
+# Unfreeze training
+lp_batch_size: 64
+n_blocks: 3
+learning_rate_head: 1.0e-4
+learning_rate_backbone: 1.0e-5
+weight_decay: 0.01
+warmup_epochs: 0
+lp_epochs: 10
+lp_batch_size: 32
+lp_patience: 3
+
 
 # optuna_n_trials: 50
 # optuna_epochs: 20   # short runs during search

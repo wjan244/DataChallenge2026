@@ -1,6 +1,6 @@
 import torch
 
-from src.models.lora import LoRALinear
+from src_amo.models.lora import LoRALinear
 
 def inject_linear_mlp_probing(model:torch.nn.Module,probing_type:str,hidden_size:int=None)->torch.nn.Module:
     # trouver le bon container qui expose la tête (head/classifier)

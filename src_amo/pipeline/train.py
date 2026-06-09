@@ -7,11 +7,11 @@ import time
 
 from pathlib import Path
 from tqdm import tqdm
-from src.config import*
+from src_amo.config import*
 
-from src.data.data_utils import get_challenge_split
-from src.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
-from src.models.models import get_model
+from src_amo.data.data_utils import get_challenge_split
+from src_amo.models.loss import WeightedMSELoss, WeightedLiteMSELoss, UniversalLossWrapper
+from src_amo.models.models import get_model
 
 # Loss mapping
 LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLiteMSE":WeightedLiteMSELoss}
@@ -25,7 +25,7 @@ def run_train(timestamp: str, train_loader, val_loader, cfg_mod, cfg_glob, cfg_m
     - extraire les poids du run_train précédent
     - instancier le modèle avec les poids du modèle base ou ceux du précédent entrainement
     - préparer les données
-    - dataAugmentation définie dans src.transforms
+    - dataAugmentation définie dans src_amo.transforms
     - backpropagation suivant les paramètres de configuration de config.py
     - optimisation du learning rate avec un cosine scheduler
     - sauvegarde des poids/métriques/paramètres en local et sur le Dashboard MLFlow

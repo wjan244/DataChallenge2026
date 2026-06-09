@@ -5,6 +5,8 @@ import argparse
 
 import dagshub
 import mlflow
+from src.dino.run_unfreeze import run_unfreeze
+
 
 # torch optim
 import torch._dynamo
@@ -31,11 +33,11 @@ SEED = load_config(CONFIG_DEFAULT)["globaux"]["SEED"]
 
 
 # seeds
-random.seed(SEED)
-np.random.seed(SEED)
-torch.manual_seed(SEED)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(SEED)
+# random.seed(SEED)
+# np.random.seed(SEED)
+# torch.manual_seed(SEED)
+# if torch.cuda.is_available():
+#     torch.cuda.manual_seed_all(SEED)
 
 def main(file_name):
     cfg = load_config(file_name)
@@ -57,7 +59,9 @@ def main(file_name):
         if cfg.get("optuna_n_trials") is not None:
             run_optuna(file_name, timestamp, experiment_id, mode="cnn")
         else:
-            run_cnn(file_name, timestamp, experiment_id)
+            run_cnn(file_name, timestamp, experiment_id) 
+    elif cfg.get("type") == "dino_unfreeze":
+        run_unfreeze(file_name, timestamp, experiment_id)
     elif cfg.get("scratch_training", {}).get("run_execution") == True:
         run_scratch(cfg, timestamp, experiment_id)
     elif cfg.get("cnn_ft_training", {}).get("run_execution") == True:

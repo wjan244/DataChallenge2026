@@ -5,9 +5,9 @@ import torch
 from torch import nn
 from torchinfo import summary
 
-from src.models import CUSTOM_MODELS
-from src.models.scratch_cnn import ConvNet
-from src.models.finetuning import inject_linear_mlp_probing,inject_lora_transformer
+from src_amo.models import CUSTOM_MODELS
+from src_amo.models.scratch_cnn import ConvNet
+from src_amo.models.finetuning import inject_linear_mlp_probing,inject_lora_transformer
 
 class OcclusionModel(nn.Module):
     """
@@ -94,7 +94,7 @@ def get_model(model_name: str, num_classes=1, method: str | None = None, weights
 
 
 if __name__ == "__main__":
-    from src.config_utils import load_config    
+    from src_amo.config_utils import load_config    
     cfg = load_config("beit3_base_patch16_224.yaml")
 
     # On teste en passant le dictionnaire d'hyperparamètres du YAML via **

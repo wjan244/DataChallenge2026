@@ -1,6 +1,6 @@
 import yaml
 
-from src.config import CONFIG_DEFAULT,CONFIG_MODELS
+from src_amo.config import CONFIG_DEFAULT,CONFIG_MODELS
 
 def deep_update(mapping, updating_mapping):
     for k, v in updating_mapping.items():

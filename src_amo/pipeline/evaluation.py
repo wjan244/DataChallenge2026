@@ -7,10 +7,10 @@ from torch import nn
 from torchmetrics.classification import BinaryF1Score
 from tqdm import tqdm
 
-from src.config import*
-from src.metrics import metric_fn,error_fn
-from src.models.models import get_model
-from src.models.loss import WeightedLiteMSELoss,UniversalLossWrapper,WeightedMSELoss
+from src_amo.config import*
+from src_amo.metrics import metric_fn,error_fn
+from src_amo.models.models import get_model
+from src_amo.models.loss import WeightedLiteMSELoss,UniversalLossWrapper,WeightedMSELoss
 
 # Loss mapping
 LOSS_MAPPING = {"MSE":nn.MSELoss,"BCE":nn.BCELoss, "nMSE":WeightedMSELoss, "nLiteMSE":WeightedLiteMSELoss}

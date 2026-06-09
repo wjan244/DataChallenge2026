@@ -4,8 +4,8 @@ import pandas as pd
 
 from tqdm import tqdm
 
-from src.config import*
-from src.models.models import get_model
+from src_amo.config import*
+from src_amo.models.models import get_model
 
 
 def save_split_predictions(timestamp, loader, split_name, method_FT, cfg_mod, method_kwargs=None):

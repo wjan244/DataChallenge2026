@@ -34,12 +34,12 @@ class PatchCNN(nn.Module):
             # nn.GELU(),
 
             # Stage 3: spatial mixing, keep 16×16
-            nn.Conv2d(256, 64, 3, padding=1, bias=False),
+            nn.Conv2d(256, 64, 3, stride=1, padding=1, bias=False, padding_mode='reflect'),
             nn.GroupNorm(1, 64),
             nn.GELU(),
 
             # Stage 4: downsample 14→7
-            nn.Conv2d(64, 8, 3, stride=2, padding=1, bias=False),
+            nn.Conv2d(64, 8, 3, stride=2, padding=1, bias=False, padding_mode='reflect'),
             nn.GroupNorm(1, 8),
             nn.GELU(),
 
@@ -53,18 +53,28 @@ class PatchCNN(nn.Module):
         head_in = conv_out_dim + cls_out_dim  # 520 = 520
 
         self.head = nn.Sequential(
-            nn.Linear(head_in, 128),
+            nn.Linear(head_in, 1024),
             nn.GELU(),
             nn.Dropout(dropout),
-            # nn.Linear(512, 128),
-            # nn.GELU(),
-            # nn.Dropout(dropout),
-            nn.Linear(128, 1),
+            nn.Linear(1024, 64),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(64, 1),
             nn.Sigmoid()
         )
 
         self._init_weights()
+                
+    def forward(self, x, cls=None):
+        feat = self.conv(x)       # [B, 32, 7, 7]
+        feat = feat.flatten(1)    # [B, 1568]
 
+        if self.use_cls and cls is not None:
+            cls_feat = F.gelu(self.cls_proj(cls))       # [B, 512]
+            feat = torch.cat([feat, cls_feat], dim=1)   # [B, 2560]
+
+        return self.head(feat)
+    
     def _init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -86,17 +96,6 @@ class PatchCNN(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
                     
-                
-    def forward(self, x, cls=None):
-        feat = self.conv(x)       # [B, 32, 7, 7]
-        feat = feat.flatten(1)    # [B, 1568]
-
-        if self.use_cls and cls is not None:
-            cls_feat = F.gelu(self.cls_proj(cls))       # [B, 512]
-            feat = torch.cat([feat, cls_feat], dim=1)   # [B, 2560]
-
-        return self.head(feat)
-    
 
 def train_cnn(model, train_loader, val_loader, optimizer, scheduler, loss_fn, save_path, cfg, trial=None):
     best_score = float("inf")
@@ -191,6 +190,9 @@ def run_cnn(file_name, timestamp, experiment_id):
         # training loop with early stopping
         model, best_score = train_cnn(model, train_loader, val_loader, optimizer, scheduler, loss_fn, save_path, cfg)
         
+        # load best model
+        model.load_state_dict(torch.load(save_path, weights_only=True))
+
         # save score without wi
         pscore = eval_final_cnn(model, val_loader)
         mlflow.log_metrics({"val_Pscore": pscore})

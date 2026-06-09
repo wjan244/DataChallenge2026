@@ -14,10 +14,10 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from src.config import IMG_DIR, SUBMISSION_DIR
-from src.metrics import error_fn, metric_fn
-import src.models.loss as loss_module
-from src.models.loss import UniversalLossWrapper
+from src_amo.config import IMG_DIR, SUBMISSION_DIR
+from src_amo.metrics import error_fn, metric_fn
+import src_amo.models.loss as loss_module
+from src_amo.models.loss import UniversalLossWrapper
 
 STARS_PATH = Path(__file__).parent / "stars.json"
 
