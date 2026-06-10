@@ -12,33 +12,6 @@ from src.data.data_stats import distribution_adaptation_reweight, get_test_distr
 bins = np.linspace(0, 1, N_BINS + 1)
 bin_center = (bins[:-1] + bins[1:]) / 2
 
-EXCLUDE_FILES = {
-    "database3/database3/m.017m44/19-FaceId-0_align.webp",
-    "database3/database3/m.017yfz/70-FaceId-0_align.webp",
-    "database3/database3/m.019x6k/87-FaceId-0_align.webp",
-    "database3/database3/m.01c56w/50-FaceId-54_align.webp",
-    "database3/database3/m.01flb2/71-FaceId-0_align.webp",
-    "database3/database3/m.01m98bv/89-FaceId-0_align.webp",
-    "database3/database3/m.01mxqdc/52-FaceId-0_align.webp",
-    "database3/database3/m.01n57q/82-FaceId-0_align.webp",
-    "database3/database3/m.01npms/2-FaceId-0_align.webp",
-    "database3/database3/m.01wzwfb/78-FaceId-0_align.webp",
-    "database3/database3/m.01y_15/49-FaceId-0_align.webp",
-    "database3/database3/m.01z1pc/41-FaceId-0_align.webp",
-    "database3/database3/m.0256sx/61-FaceId-0_align.webp",
-    "database3/database3/m.0266wpt/31-FaceId-0_align.webp",
-    "database3/database3/m.026nflj/116-FaceId-1_align.webp",
-    "database3/database3/m.026qq00/34-FaceId-2_align.webp",
-    "database3/database3/m.02mcr6/92-FaceId-0_align.webp",
-    "database3/database3/m.014k1v/113-FaceId-0_align.webp",
-}
-
-def get_challenge_split(screenshot_path=SCREENSHOT_PATH):
-    """
-    nettoie les données, effectue le split train/validation 
-    et adapte les distributions.
-    """
-    df_train_clean = df_train_raw.dropna()
 
 EXCLUDE_FILES = {
     "database3/database3/m.017m44/19-FaceId-0_align.webp",

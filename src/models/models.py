@@ -164,7 +164,7 @@ if __name__ == "__main__":
     import timm
 
     cfg = load_config("vit_base_patch16_dinov3.yaml")
-    addversarial_section = cfg.get("probing_training")
+    addversarial_section = cfg.get("lora_training")
     cfg_kwargs = addversarial_section.get("method_kwargs") or {}
 
     model = get_model(
