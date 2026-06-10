@@ -23,7 +23,7 @@ lp_loss: "CompoundLoss"
 lp_loss_alpha: 1.0    
 lp_loss_beta: 0.1    
 lp_loss_gamma: 1.0    
-lp_loss_kappa: 1.0    
+lp_loss_kappa: 0.0    
 lp_patience: 5
 lp_dropout: 0.2
 

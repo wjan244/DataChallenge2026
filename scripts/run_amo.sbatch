@@ -9,7 +9,7 @@
 #SBATCH --account p_test_rma
 
 #SBATCH --acctg-freq=task=10
-#SBATCH --job-name=test
+#SBATCH --job-name=amo
 #SBATCH --error=logs/%j.out
 #SBATCH --output=logs/%j.out
 

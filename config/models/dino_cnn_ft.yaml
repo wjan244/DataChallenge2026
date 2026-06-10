@@ -19,15 +19,14 @@ lp_dropout: 0.2
      
 
 # Unfreeze training
-lp_batch_size: 64
-n_blocks: 3
-learning_rate_head: 1.0e-4
-learning_rate_backbone: 1.0e-5
-weight_decay: 0.01
+n_blocks: 12
+learning_rate_head: 1.0e-3
+learning_rate_backbone: 1.0e-4
+weight_decay: 0.0001
 warmup_epochs: 0
-lp_epochs: 10
-lp_batch_size: 32
-lp_patience: 3
+lp_epochs: 30
+lp_batch_size: 128
+lp_patience: 5
 
 
 # optuna_n_trials: 50

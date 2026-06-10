@@ -62,6 +62,12 @@ def main(file_name):
             run_cnn(file_name, timestamp, experiment_id) 
     elif cfg.get("type") == "dino_unfreeze":
         run_unfreeze(file_name, timestamp, experiment_id)
+    elif cfg.get("type") == "dino_full":
+        from src.dino.dino_full import run_full
+        run_full(file_name, timestamp, experiment_id)
+    elif cfg.get("type") == "efficientnet_full":
+        from src.efficientnet.efficientnet_full import run_efficientnet_full
+        run_efficientnet_full(file_name, timestamp, experiment_id)
     elif cfg.get("scratch_training", {}).get("run_execution") == True:
         run_scratch(cfg, timestamp, experiment_id)
     elif cfg.get("cnn_ft_training", {}).get("run_execution") == True:

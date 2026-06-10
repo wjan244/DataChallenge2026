@@ -36,6 +36,19 @@ class DinoFinetuneModel(nn.Module):
         return self.head(grid, cls)
     
 
+def _get_layers_and_norm(backbone):
+    """Locate transformer layers + final norm regardless of HF wrapper depth."""
+    if hasattr(backbone, 'model') and hasattr(backbone.model, 'layer'):
+        return backbone.model.layer, backbone.norm          # outer DINOv3Model
+    if hasattr(backbone, 'layer'):
+        return backbone.layer, getattr(backbone, 'norm', None)  # inner DINOv3ViTModel
+    if hasattr(backbone, 'encoder') and hasattr(backbone.encoder, 'layer'):
+        norm = getattr(backbone, 'layernorm', getattr(backbone, 'norm', None))
+        return backbone.encoder.layer, norm                 # DINOv2 / ViT
+    children = [n for n, _ in backbone.named_children()]
+    raise AttributeError(f"Cannot find layers in {type(backbone).__name__}. Children: {children}")
+
+
 def build_dino_ft_model(cfg) -> DinoFinetuneModel:
     backbone = AutoModel.from_pretrained(cfg["model_name"])
     for p in backbone.parameters():
@@ -46,12 +59,20 @@ def build_dino_ft_model(cfg) -> DinoFinetuneModel:
     head.load_state_dict(torch.load(cfg["head_checkpoint"], map_location="cpu"))
     print(f"Head loaded from {cfg['head_checkpoint']}")
 
+    layers, norm = _get_layers_and_norm(backbone)
     n = cfg["n_blocks"]
-    for layer in backbone.encoder.layer[-n:]:
-        for p in layer.parameters():
-            p.requires_grad = True
-    for p in backbone.layernorm.parameters():
-        p.requires_grad = True
+    for layer in layers[-n:]:
+        for p in layer.attention.parameters():   p.requires_grad = True
+        for p in layer.mlp.parameters():         p.requires_grad = True
+        for p in layer.layer_scale1.parameters(): p.requires_grad = True
+        for p in layer.layer_scale2.parameters(): p.requires_grad = True
+        # norm1 and norm2 stay frozen — advised by enzo not to unfreeze the layernorm
+        # for p in layer.norm1.parameters():     p.requires_grad = True
+        # for p in layer.norm2.parameters():     p.requires_grad = True
+    # advised by enzo not to unfreeze the final norm
+    # if norm is not None:
+    #     for p in norm.parameters():
+    #         p.requires_grad = True
 
     return DinoFinetuneModel(backbone, head)
 
@@ -79,6 +100,8 @@ def train_unfreeze(model, train_loader, val_loader, optimizer, scheduler, loss_f
             bb_norm += clip_grad_norm_(
                 [p for p in model.backbone.parameters() if p.requires_grad], 1.0
             ).item()
+            if bb_norm < 1e-3:
+                print("Warning: backbone gradients near zero")
             hd_norm += clip_grad_norm_(model.head.parameters(), 1.0).item()
 
             optimizer.step()
@@ -106,6 +129,7 @@ def train_unfreeze(model, train_loader, val_loader, optimizer, scheduler, loss_f
         if val_score < best_score:
             best_score, patience_ctr = val_score, 0
             torch.save(model.state_dict(), save_path)
+            print(f"  checkpoint saved (val_score={val_score:.4f})")
         else:
             patience_ctr += 1
             if patience_ctr >= patience:
@@ -155,11 +179,10 @@ def _build_image_transform(model_name: str):
     ])
     
 def _build_optimizer(model: DinoFinetuneModel, cfg: dict):
+    layers, _ = _get_layers_and_norm(model.backbone)
     n = cfg["n_blocks"]
-    backbone_params = []
-    for layer in model.backbone.encoder.layer[-n:]:
-        backbone_params.extend(layer.parameters())
-    backbone_params.extend(model.backbone.layernorm.parameters())
+    # only collect params that were actually unfrozen (excludes norm1/norm2/final norm)
+    backbone_params = [p for layer in layers[-n:] for p in layer.parameters() if p.requires_grad]
 
     return torch.optim.AdamW([
         {"params": list(model.head.parameters()), "lr": cfg["learning_rate_head"],     "weight_decay": cfg["weight_decay"]},

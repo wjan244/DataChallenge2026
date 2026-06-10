@@ -113,6 +113,7 @@ config/
     efficient_net.yaml                 # EfficientNetV2-S finetuned via CNN finetuning pipeline
     dino.yaml                          # DINOv3 LP config (type: dino_lp)
     dino_cnn.yaml                      # DINOv3 PatchCNN config (type: dino_cnn)
+    dino_cnn_ft.yaml                   # DINOv3 end-to-end unfreeze config (type: dino_unfreeze)
   optuna/                        # Optuna result CSVs saved here per run
 
 src/dino/
@@ -122,7 +123,10 @@ src/dino/
                                 #   Noisy samples (validation_noisy.csv) always split 80/20
                                 #   and appended to both train and val
   utils.py                      # Shared: EmbeddingDataset (LP), PatchDataset (CNN),
+                                #   ImageDataset (unfreeze — loads raw images from IMG_DIR,
+                                #     reads {split}_meta.csv from embedding_dir for same split),
                                 #   compute_laplacian_iw(), eval_epoch / eval_epoch_cnn,
+                                #   eval_epoch_image (image loader variant for unfreeze),
                                 #   eval_final_cnn (PScore without iw),
                                 #   save_submission / save_submission_cnn, load_config
   run_lp.py                     # Linear probe on frozen embeddings: LinearProbe, train_lp,
@@ -131,6 +135,25 @@ src/dino/
                                 #   run_cnn; logs val_Pscore after training
   run_optuna.py                 # Optuna search: objective_lp (discrete loss search),
                                 #   objective_cnn (CompoundLoss param search), run_optuna
+  run_unfreeze.py               # End-to-end finetuning of DINOv3 backbone + PatchCNN head:
+                                #   DinoFinetuneModel: HF backbone + PatchCNN head;
+                                #     forward() extracts CLS + patch grid from last_hidden_state,
+                                #     skips register tokens via patch_start = 1 + n_reg
+                                #   _get_layers_and_norm(): auto-detects layer path across HF
+                                #     wrapper depths (DINOv3Model outer vs DINOv3ViTModel inner)
+                                #   build_dino_ft_model(): freeze all → load head checkpoint →
+                                #     selectively unfreeze top n_blocks: attention + mlp +
+                                #     layer_scale1/2 only; norm1/norm2/final norm stay frozen
+                                #   _build_image_transform(): uses AutoImageProcessor for
+                                #     exact model mean/std
+                                #   _build_optimizer(): AdamW with two param groups
+                                #     (learning_rate_head / learning_rate_backbone)
+                                #   _make_scheduler(): LambdaLR per group; optional linear
+                                #     warmup on backbone only (head already finetuned)
+                                #   train_unfreeze(): early stopping on CLEAN val (no noisy),
+                                #     grad norm clipping + per-epoch averaged MLflow logging
+                                #   save_submission_unfreeze(): test CSV + final val scoring
+                                #     on NOISY val after best model is reloaded
 
 scripts/
   run_cluster.sbatch            # SLURM job script for cluster training
@@ -148,6 +171,7 @@ scripts/
 `main.py` selects the pipeline based on the config:
 - `type: dino_lp` → DINOv3 linear probe (with Optuna if `optuna_n_trials` is set)
 - `type: dino_cnn` → DINOv3 PatchCNN (with Optuna if `optuna_n_trials` is set)
+- `type: dino_unfreeze` → DINOv3 end-to-end finetuning (backbone + PatchCNN head)
 - `scratch_training.run_execution: True` → scratch pipeline
 - `cnn_ft_training.run_execution: True` → CNN finetuning pipeline
 - otherwise → 3-stage transformer pipeline
@@ -237,6 +261,50 @@ Uncomment `optuna_n_trials` / `optuna_epochs` / `optuna_patience` in the config 
 - LP Optuna (`objective_lp`): searches over lr, hidden, dropout, weight_decay, loss type, smooth_alpha
 - CNN Optuna (`objective_cnn`): searches over lr, dropout, weight_decay, and all four `CompoundLoss` params (alpha, beta, gamma, kappa)
 Results saved to `config/optuna/{timestamp}_optuna_results.csv` and logged to MLflow.
+
+**Step 2c — End-to-end Unfreeze** (`type: dino_unfreeze`):
+```bash
+python main.py --config dino_cnn_ft.yaml
+```
+Loads a pretrained PatchCNN head checkpoint and plugs it back onto the live DINOv3 backbone. Processes raw images (no pre-computed embeddings). Requires `{split}_meta.csv` files from a prior `embed.py` run in `embedding_dir` to guarantee the same train/val split.
+
+**DINOv3 backbone structure** (`facebook/dinov3-vitb16-pretrain-lvd1689m`, 768-dim, 12 layers):
+```
+backbone
+├── embeddings       — patch projection + position encoding  [always frozen]
+├── rope_embeddings  — rotary position embeddings            [always frozen]
+├── model (DINOv3ViTEncoder)
+│   └── layer [ModuleList, 12 × DINOv3ViTLayer]
+│       Each block:
+│       ├── norm1        — LayerNorm pre-attention  [frozen — advised by Enzo]
+│       ├── attention    — q/k/v/o projections      [unfrozen]
+│       ├── layer_scale1 — per-channel learned gate  [unfrozen]
+│       ├── norm2        — LayerNorm pre-MLP        [frozen — advised by Enzo]
+│       ├── mlp          — 768→3072→768 feed-forward [unfrozen]
+│       └── layer_scale2 — per-channel learned gate  [unfrozen]
+└── norm             — final LayerNorm               [frozen — advised by Enzo]
+```
+`_get_layers_and_norm()` auto-detects the layer path across HF wrapper depths so the code works regardless of which class `AutoModel` returns.
+
+**Validation strategy:**
+- During training: early stopping on **clean val** (`val_use_noisy` hardcoded `False`)
+- After training (best checkpoint reloaded): final scoring on **noisy val** (`val_use_noisy` hardcoded `True`), logged as `final_val_score_noisy`
+
+**Key config keys** (dino_cnn_ft.yaml / dino_unfreeze):
+| Key | Description |
+|-----|-------------|
+| `model_name` | HuggingFace model id for the backbone |
+| `embedding_dir` | Dir under `data/` containing `{split}_meta.csv` from embed step |
+| `head_checkpoint` | Absolute path to a saved `PatchCNN` `.pt` file |
+| `n_blocks` | Number of top transformer blocks to unfreeze (max 12 for base) |
+| `learning_rate_head` | LR for the PatchCNN head (e.g. 1e-4) |
+| `learning_rate_backbone` | LR for unfrozen backbone layers (e.g. 1e-5) |
+| `weight_decay` | AdamW weight decay for both param groups |
+| `warmup_epochs` | Linear warmup epochs for backbone LR only (0 = off) |
+| `augmentation` | Whether to apply augmentation to train images |
+| `lp_loss` / `lp_loss_alpha/beta` | Loss function — same keys as `dino_lp` / `dino_cnn` |
+| `lp_epochs` / `lp_patience` / `lp_batch_size` | Training loop settings |
+| `smooth_alpha` | Laplacian smoothing for importance weights |
 
 **Key config keys** (dino_cnn.yaml / dino.yaml):
 | Key | Description |

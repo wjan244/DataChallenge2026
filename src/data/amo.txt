@@ -1,0 +1,2 @@
+rsync -vr lucia:/gpfs/scratch/rma/p_test_rma/datachallenge/submission/2026-06-09_19-58-18_submission_vit_base_patch16_dinov3.lvd1689m_clean_trainval_43/test.csv amo
+rsync -vr lucia:/gpfs/scratch/rma/p_test_rma/datachallenge/checkpoints/clean_trainval_43_final.pt amo
