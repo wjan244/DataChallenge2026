@@ -51,10 +51,16 @@ def distribution_adaptation_reweight(n_sample, df, test_distribution):
     ratio_KL = test_distribution / (df_distribution)
     bin_categorie = pd.cut(df["FaceOcclusion"], bins=bins, include_lowest=True, ordered=True, labels=False)
     df['D_KL'] = ratio_KL[bin_categorie]
-    max_weight = 5.0
-    df['D_KL'] = df['D_KL'].clip(upper=max_weight)
+    
+    df_femal = df[df['gender']==1]
+    df_mal = df[df['gender']==0]
+    n_femal = n_sample//2
+    n_mal = n_sample//2
+    df_reweight_mal = df_mal.sample(n=n_mal, weights='D_KL', replace=True, random_state=40)
+    df_reweight_femal = df_femal.sample(n=n_femal, weights='D_KL', replace=True, random_state=42)
+    df_reweight = pd.concat([df_reweight_femal, df_reweight_mal],axis=0).reset_index(drop=True)
 
-    df_reweight = df.sample(n=n_sample, weights='D_KL', replace=True, random_state=42)
+    #df_reweight = df.sample(n=n_sample, weights='D_KL', replace=True, random_state=42)
     df_reweight = df_reweight.rename(columns={"D_KL": "iw"})
     return df_reweight, test_distribution, df_distribution
 

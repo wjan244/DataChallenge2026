@@ -12,10 +12,12 @@ def get_augmentation_finetuning_transforms()->None:
     - FlouGaussien
     """
     #option 0:
-    return v2.Compose([
-        v2.RandomResizedCrop(size=224, scale=(0.85, 1.0), antialias=True),
-        v2.RandomHorizontalFlip(p=0.5)
-    ])
+    return v2.RandomChoice([v2.Identity(),
+                           v2.RandomChoice([v2.RandomRotation(degrees=15),
+                                            v2.RandomHorizontalFlip(p=0.5),
+                                            v2.ColorJitter(brightness=0.2),
+                                            v2.ColorJitter(contrast=0.3)])],
+                            p=[0.2,0.8])    # 20% de identité et 80% de random_choice
     
     # option 1:
     # return v2.Compose([v2.RandomHorizontalFlip(p=0.5),

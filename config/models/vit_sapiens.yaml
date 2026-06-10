@@ -1,15 +1,15 @@
-model: 'vit_base_patch16_dinov3.lvd1689m'
+model: 'sapiens2_1b'
     
 probing_training:
   run_execution: True
   loss_name: "HuberLossRegularized"
   learning_rate: 1.0e-3
-  num_epoch: 20
+  num_epoch: 1
   method_FT: "probing_training"
   method_kwargs:
     num_classes: 1
     probing_type: "mlp_probing"
-    hidden_size: 256
+    hidden_size: 768
 
 adversarial_probing_training:
   run_execution: False
@@ -25,13 +25,13 @@ adversarial_probing_training:
     lambda: 0.5
 
 lora_training:
-  run_execution: True
+  run_execution: False
   loss_name: "HuberLossRegularized"
-  learning_rate: 5.0e-5
-  num_epoch: 20
+  learning_rate: 2.0e-4
+  num_epoch: 25
   method_FT: "lora_training"
   method_kwargs:
-    rank: 16
-    alpha: 4
+    rank: 8
+    alpha: 16
     dropout: 0.1
     num_classes: 1

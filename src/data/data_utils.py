@@ -12,12 +12,64 @@ from src.data.data_stats import distribution_adaptation_reweight, get_test_distr
 bins = np.linspace(0, 1, N_BINS + 1)
 bin_center = (bins[:-1] + bins[1:]) / 2
 
+EXCLUDE_FILES = {
+    "database3/database3/m.017m44/19-FaceId-0_align.webp",
+    "database3/database3/m.017yfz/70-FaceId-0_align.webp",
+    "database3/database3/m.019x6k/87-FaceId-0_align.webp",
+    "database3/database3/m.01c56w/50-FaceId-54_align.webp",
+    "database3/database3/m.01flb2/71-FaceId-0_align.webp",
+    "database3/database3/m.01m98bv/89-FaceId-0_align.webp",
+    "database3/database3/m.01mxqdc/52-FaceId-0_align.webp",
+    "database3/database3/m.01n57q/82-FaceId-0_align.webp",
+    "database3/database3/m.01npms/2-FaceId-0_align.webp",
+    "database3/database3/m.01wzwfb/78-FaceId-0_align.webp",
+    "database3/database3/m.01y_15/49-FaceId-0_align.webp",
+    "database3/database3/m.01z1pc/41-FaceId-0_align.webp",
+    "database3/database3/m.0256sx/61-FaceId-0_align.webp",
+    "database3/database3/m.0266wpt/31-FaceId-0_align.webp",
+    "database3/database3/m.026nflj/116-FaceId-1_align.webp",
+    "database3/database3/m.026qq00/34-FaceId-2_align.webp",
+    "database3/database3/m.02mcr6/92-FaceId-0_align.webp",
+    "database3/database3/m.014k1v/113-FaceId-0_align.webp",
+}
+
 def get_challenge_split(screenshot_path=SCREENSHOT_PATH):
     """
     nettoie les données, effectue le split train/validation 
     et adapte les distributions.
     """
     df_train_clean = df_train_raw.dropna()
+
+EXCLUDE_FILES = {
+    "database3/database3/m.017m44/19-FaceId-0_align.webp",
+    "database3/database3/m.017yfz/70-FaceId-0_align.webp",
+    "database3/database3/m.019x6k/87-FaceId-0_align.webp",
+    "database3/database3/m.01c56w/50-FaceId-54_align.webp",
+    "database3/database3/m.01flb2/71-FaceId-0_align.webp",
+    "database3/database3/m.01m98bv/89-FaceId-0_align.webp",
+    "database3/database3/m.01mxqdc/52-FaceId-0_align.webp",
+    "database3/database3/m.01n57q/82-FaceId-0_align.webp",
+    "database3/database3/m.01npms/2-FaceId-0_align.webp",
+    "database3/database3/m.01wzwfb/78-FaceId-0_align.webp",
+    "database3/database3/m.01y_15/49-FaceId-0_align.webp",
+    "database3/database3/m.01z1pc/41-FaceId-0_align.webp",
+    "database3/database3/m.0256sx/61-FaceId-0_align.webp",
+    "database3/database3/m.0266wpt/31-FaceId-0_align.webp",
+    "database3/database3/m.026nflj/116-FaceId-1_align.webp",
+    "database3/database3/m.026qq00/34-FaceId-2_align.webp",
+    "database3/database3/m.02mcr6/92-FaceId-0_align.webp",
+    "database3/database3/m.014k1v/113-FaceId-0_align.webp",
+}
+
+def get_challenge_split(screenshot_path=SCREENSHOT_PATH):
+    """
+    nettoie les données, effectue le split train/validation 
+    et adapte les distributions.
+    """
+    df_train_clean = df_train_raw.dropna()
+    df_train_clean = df_train_clean[
+    ~df_train_clean["filename"].isin(EXCLUDE_FILES)
+].reset_index(drop=True)
     df_test = df_test_raw.dropna().reset_index(drop=True)
     
     # split initial stratifié de manière aléatoire (80% Train, 20% Eval)
@@ -40,7 +92,9 @@ if __name__ == "__main__":
 
     # Génération du split de données adapté via l'image
     df_train_sub, df_val_raw, df_val_samp, df_test = get_challenge_split(screenshot_path=SCREENSHOT_PATH)
-    print(f"dimension de train{len(df_train_sub)}")
+    
+    print(f"dimension de val: {len(df_val_samp)}")
+    print(f"dimension de train: {len(df_train_sub)}")
     # Récupération de la distribution cible de référence
     test_distribution = get_test_distribution_from_screenshot(SCREENSHOT_PATH)
 
@@ -48,7 +102,7 @@ if __name__ == "__main__":
     print(f"Poids max: {df_train_sub['iw'].max()}, Poids min: {df_train_sub['iw'].min()}")
     
     # --- LIGNE AJOUTÉE ICI ---
-    print(f"Images uniques (sans les doublons) : {df_train_sub['filename'].nunique()}")
+    print(f"Images uniques (sans les doublons) : {df_train_sub['filename'].nunique()+df_val_samp['filename'].nunique()}")
 
     # Calcul des histogrammes réels de contrôle
     train_distribution, _ = np.histogram(df_train_raw["FaceOcclusion"], bins=N_BINS, density=True) 

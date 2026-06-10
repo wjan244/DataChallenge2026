@@ -57,7 +57,7 @@ def run_probing(cfg,timestamp, experiment_id, precedent_run_id=None, precedent_m
                                                  prefix=None)
 
             #run_evaluation(timestamp=timestamp, cfg_glob=cfg_glob, val_loader=val_loader, loss_name=loss_name, method_FT=method_ft, cfg_mod=cfg_mod, prefix=None, method_kwargs=cfg_method_lp.get("method_kwargs"), index=None)
-            return_method = cfg_method
+            return_method = method_ft
             test_loader = get_challenge_test_loader(df_test, cfg_glob["BATCH_SIZE"], NUM_WORKERS, model_name=cfg_mod)
             run_test(timestamp, cfg_glob, test_loader, method_ft, cfg_mod, method_kwargs=cfg_method_lp.get("method_kwargs"))
             # save predictions for the train split using the method tag (e.g. probing_training)
