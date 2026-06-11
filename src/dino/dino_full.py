@@ -16,6 +16,28 @@ from src.dino.run_lp import build_loss
 from src.dino.run_cnn import PatchCNN
 from src.dino.utils import load_config, ImageDataset, eval_epoch_image
 
+
+class AmoHead(nn.Module):
+    """Per-patch shared MLP → 3-class softmax → occluded / (visible + occluded) ratio.
+    Classes: 0=background, 1=visible, 2=occluded.
+    Input: (B, n_patch, D)  Output: (B, 1)."""
+    def __init__(self, in_dim: int, hidden: int = 128, dropout: float = 0.1):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(in_dim, hidden),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden, 3),
+        )
+
+    def forward(self, patch_tokens):          # (B, n_patch, D)
+        logits = self.net(patch_tokens)       # (B, n_patch, 3)
+        probs  = torch.softmax(logits, dim=-1)
+        p_vis  = probs[:, :, 1]              # (B, n_patch)
+        p_occ  = probs[:, :, 2]              # (B, n_patch)
+        ratio  = p_occ.sum(dim=1) / (p_vis.sum(dim=1) + p_occ.sum(dim=1) + 1e-8)
+        return ratio.unsqueeze(1)            # (B, 1)
+
 _PIN = DEVICE.type == "cuda"
 _PW  = NUM_WORKERS > 0
 
@@ -23,7 +45,7 @@ _PW  = NUM_WORKERS > 0
 # --- copied from run_unfreeze.py ---
 
 class DinoFinetuneModel(nn.Module):
-    def __init__(self, backbone, head: PatchCNN):
+    def __init__(self, backbone, head: nn.Module):
         super().__init__()
         self.backbone    = backbone
         self.head        = head
@@ -33,7 +55,9 @@ class DinoFinetuneModel(nn.Module):
     def forward(self, pixel_values):
         h       = self.backbone(pixel_values=pixel_values).last_hidden_state
         cls     = h[:, 0]
-        patches = h[:, self.patch_start:]
+        patches = h[:, self.patch_start:]          # (B, N, D)
+        if isinstance(self.head, AmoHead):
+            return self.head(patches)
         B, N, D = patches.shape
         grid    = patches.reshape(B, 14, 14, D).permute(0, 3, 1, 2)
         return self.head(grid, cls)
@@ -100,17 +124,23 @@ def _set_blocks_unfrozen(backbone, n: int):
 
 
 def build_dino_full_model(cfg) -> DinoFinetuneModel:
-    backbone = AutoModel.from_pretrained(cfg["model_name"])
+    backbone  = AutoModel.from_pretrained(cfg["model_name"])
     for p in backbone.parameters():
         p.requires_grad = False
 
-    D    = backbone.config.hidden_size
-    head = PatchCNN(patch_dim=D, dropout=cfg["lp_dropout"], use_cls=True)
-    if ckpt := cfg.get("head_checkpoint"):
-        head.load_state_dict(torch.load(ckpt, map_location="cpu"))
-        print(f"Head loaded from {ckpt}")
+    D         = backbone.config.hidden_size
+    head_type = cfg.get("head_type", "patch_cnn")
+
+    if head_type == "amo":
+        head = AmoHead(in_dim=D, hidden=cfg.get("amo_hidden", 128), dropout=cfg.get("lp_dropout", 0.1))
+        print("Head: AmoHead (3-class ratio, initialised from scratch)")
     else:
-        print("Head initialised from scratch")
+        head = PatchCNN(patch_dim=D, dropout=cfg["lp_dropout"], use_cls=True)
+        if ckpt := cfg.get("head_checkpoint"):
+            head.load_state_dict(torch.load(ckpt, map_location="cpu"))
+            print(f"Head: PatchCNN loaded from {ckpt}")
+        else:
+            print("Head: PatchCNN initialised from scratch")
 
     # backbone starts fully frozen — unfreezing happens inside train_full
     model = DinoFinetuneModel(backbone, head)

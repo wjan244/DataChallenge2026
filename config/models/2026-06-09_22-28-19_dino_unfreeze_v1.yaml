@@ -1,0 +1,30 @@
+# Model
+model_name: "facebook/dinov3-vitb16-pretrain-lvd1689m"
+type: dino_unfreeze
+embedding_dir: "embedding-vitb16+patches"
+embed_dim: 768
+# Data
+train_use_noisy: true
+augmentation: true
+smooth_alpha: 0       
+
+# CNN
+head_checkpoint: ../checkpoints/selected/dino_cnn_2026-06-09_20-48-20_best_exp_pad_v3.pt
+lp_loss: "CompoundLoss"
+lp_loss_alpha: 1.0    
+lp_loss_beta: 0.1    
+lp_loss_gamma: 1.0    
+lp_loss_kappa: 1.0  
+lp_dropout: 0.2
+     
+
+# Unfreeze training
+lp_batch_size: 64
+n_blocks: 12
+learning_rate_head: 1.0e-4
+learning_rate_backbone: 1.0e-5
+weight_decay: 0.01
+warmup_epochs: 0
+lp_epochs: 30
+lp_batch_size: 32
+lp_patience: 8
