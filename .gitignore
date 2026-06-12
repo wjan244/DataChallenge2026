@@ -1,5 +1,12 @@
-/data/
 *.pt
+data/test_distribution.png
+/data/Crop_224_5fp_100K/
+noisy_images
+train_clean.csv
+train_gender_weights.csv
+train_split.csv
+validation_noisy.csv
+val_split.csv
 
 checkpoints/
 archives/
