@@ -1,5 +1,5 @@
 """
-read_probe.py — Lecture d'une sonde leaderboard pour le post-processing d'équité.
+post_processing_read_probe.py — Lecture d'une sonde leaderboard pour le post-processing d'équité.
 
 À partir d'une sonde unique (variance v injectée sur un genre, score avant/après),
 classe le régime et estime la pénalité de fairness initiale G, puis régénère
@@ -36,10 +36,10 @@ Sortie :
     CLIPPÉ sur [0,1], regénéré depuis le test BRUT.
 
 Lancer depuis la racine du projet :
-    python read_probe.py \
-        --s0 0.00108 --s1 0.00120 --var 0.0008 --genre F \
+    python post_processing_read_probe.py \
+        --s0 0.00108 --s1 0.00426 --var 0.0025 --genre F \
         --confusion submission/postproc/confusion_matrix.csv \
-        --test-csv submission/2026-06-08_22-19-48_submission_vit_base_patch16_dinov3.lvd1689m_clean_trainval/test.csv \
+        --test-csv raw_prediction.csv \
         --test-genre submission/postproc/test_genre.csv
 """
 

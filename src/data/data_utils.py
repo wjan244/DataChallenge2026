@@ -4,14 +4,10 @@ import pandas as pd
 from scipy.stats import entropy
 from sklearn.model_selection import train_test_split
 from PIL import Image
-from src.config import*
-from src.config_utils import load_config
-from src.data.data_stats import distribution_adaptation_reweight, get_test_distribution_from_screenshot
+from src.config import CSV_DIR, SCREENSHOT_PATH
+from src.data.data_stats import distribution_adaptation_reweight, get_test_distribution_from_screenshot, N_BINS
 
-
-cfg_glob = load_config(CONFIG_DEFAULT).get("globaux", {})
-N_BINS = cfg_glob.get("N_BINS", 20)
-N_SAMPLE = cfg_glob.get("N_SAMPLES")
+N_SAMPLE = None
 
 bins = np.linspace(0, 1, N_BINS + 1)
 bin_center = (bins[:-1] + bins[1:]) / 2

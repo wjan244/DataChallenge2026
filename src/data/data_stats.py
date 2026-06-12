@@ -3,11 +3,8 @@ import pandas as pd
 
 from PIL import Image
 from scipy.stats import beta
-from src.config import*
-from src.config_utils import load_config
 
-cfg_glob = load_config(CONFIG_DEFAULT).get("globaux", {})
-N_BINS = cfg_glob.get("N_BINS", 20)
+N_BINS = 20
 
 bins = np.linspace(0, 1, N_BINS + 1)
 bin_center = (bins[:-1] + bins[1:]) / 2

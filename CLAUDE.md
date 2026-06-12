@@ -31,218 +31,131 @@ Score = (Err_Female + Err_Male) / 2  +  |Err_Female − Err_Male|
 ```
 The second term penalises gender disparity — the model must perform similarly on both genders.
 
-Implemented in [src/metrics.py](src/metrics.py): `error_fn()` and `metric_fn()`.
-
 ---
 
-## Code Architecture
+## Architecture
 
 ```
-main.py                         # Runs the 3-stage pipeline, scratch, or CNN finetuning depending on config
-test.py                         # Single-batch smoke test (monkey-patches DataLoader)
+train_dino_trainval.py     # Main training script (self-contained, no config YAMLs)
+post_processing_inject_noise.py             # Fairness post-processing: Gaussian noise on estimated gender
+post_processing_read_probe.py               # Leaderboard-based noise calibration utility
 
 src/
-  config.py                     # Absolute paths (IMG_DIR, CSV_DIR, CHECKPOINT_DIR…),
-                                #   DEVICE (MPS → CUDA → CPU), NUM_WORKERS
-  config_utils.py               # load_config(): deep-merges pipeline_default.yaml
-                                #   with a model-specific YAML
-
-  metrics.py                    # error_fn(), metric_fn() — the competition metric
-
+  config.py                 # Absolute paths (IMG_DIR, CSV_DIR, SUBMISSION_DIR, …),
+                            #   DEVICE (MPS → CUDA → CPU), NUM_WORKERS
   data/
-    dataset.py                  # Dataset, ChallengeTrain, CelebA — torch Dataset classes
-    data_loader.py              # Factory functions returning DataLoaders
-                                #   num_workers=NUM_WORKERS, pin_memory (CUDA only),
-                                #   persistent_workers enabled by default
-    data_utils.py               # get_challenge_split(): loads CSV, 80/20 split,
-                                #   applies distribution reweighting
-    data_stats.py               # distribution_adaptation_reweight(): computes iw/pi columns
-                                #   get_test_distribution_from_screenshot(): reads test
-                                #   distribution from data/test_distribution.png
-    transforms.py               # torchvision.transforms.v2 augmentation pipelines
+    dataset.py              # Dataset — torch Dataset: returns (image, label, gender,
+                            #   filename, iw, pi) for training; (image, filename) for test
+    data_utils.py           # get_challenge_split(): loads CSVs, 80/20 split,
+                            #   applies distribution reweighting via importance weights
+    data_stats.py           # distribution_adaptation_reweight(): KL-divergence ratio
+                            #   get_test_distribution_from_screenshot(): reads test
+                            #   distribution from test_distribution.png at repo root
 
-  models/
-    models.py                   # OcclusionModel (timm backbone + Sigmoid head)
-                                #   get_model(): factory; applies finetuning method
-                                #   CUSTOM_MODELS dict maps name → class (bypasses timm)
-    scratch_cnn.py              # ConvNet: 4-layer CNN trained from scratch
-                                #   _ConvBlock(Conv2d→BN→ReLU→MaxPool), AdaptiveAvgPool, Linear head
-    finetuning.py               # inject_lora_transformer(): replaces qkv/query/key/value
-                                #   Linear layers with LoRALinear
-                                #   inject_linear_mlp_probing(): replaces model head
-    lora.py                     # LoRALinear: frozen base + trainable low-rank A·B
-    loss.py                     # WeightedMSELoss (nMSE), WeightedLiteMSELoss (nLiteMSE),
-                                #   UniversalLossWrapper — routes by loss_name string
+notebooks/
+  diagnostic_dinov3.ipynb              # Val prediction analysis (scatter, weighted MSE,
+                                       #   worst predictions, gender balance)
+  explainable_DINO_clean_trainval.ipynb  # Per-patch heatmap visualisation of final model
 
-  pipeline/
-    train.py                    # run_train(): Adam + CosineAnnealingLR, early stopping,
-                                #   MLflow logging (incl. method_kwargs + epoch/total time),
-                                #   checkpoint saving
-    evaluation.py               # run_evaluation(index=): gender-split metric; F1/acc for
-                                #   domain-adaptation stage; index suffix avoids MLflow
-                                #   metric overwrite when called twice in the same run
-    test.py                     # run_test(): loads best checkpoint → submission CSV
-    run_domain_adaptation.py    # Stage 1 entry point
-    run_probing.py              # Stage 2 entry point
-    run_lora.py                 # Stage 3 entry point
-    run_scratch.py              # Scratch entry point (single stage, no checkpoint chaining)
-    run_cnn_ft.py               # CNN finetuning entry point: head warmup → progressive block
-                                #   unfreezing; all phases in a single MLflow run
+data/
+  Crop_224_5fp_100K/        # Training images (224×224 WEBP)
+  occlusion_datasets/
+    train.csv               # filename, FaceOcclusion, gender
+    test_students.csv       # filename (no labels)
 
-config/
-  pipeline_default.yaml         # Global defaults: SEED=42, BATCH_SIZE=32, N_SAMPLE=5000,
-                                #   PATIENCE=5, N_BINS=20, NUM_CLASSES=1
-  models/
-    beit3_base_patch16_224.yaml        # Per-model hyperparameter overrides
-    vit_tiny_patch16_224.yaml
-    vit_tiny_patch16_224_no_celeba.yaml  # Minimal run — skips CelebA stage
-    cnn_4l.yaml                        # 4-layer ConvNet trained from scratch
-    efficient_net.yaml                 # EfficientNetV2-S finetuned via CNN finetuning pipeline
-
-scripts/
-  run_cluster.sbatch            # SLURM job script for cluster training
-  mean_norm.py                  # One-shot script: computes per-channel mean & std of the
-                                #   training set (averaged over batches); use the output to
-                                #   replace the ImageNet defaults in _get_transform() for
-                                #   scratch CNN models
+dino_trainval_final.pt      # Final trained model checkpoint
+raw_prediction.csv          # Raw test-set predictions (input to post-processing)
+checkpoints/                # Intermediate training checkpoints
+submission/                 # postproc/ subfolder for noise-injection outputs
+test_distribution.png       # Test-set occlusion histogram (used for domain reweighting)
 ```
 
 ---
 
-## Pipelines
+## Model
 
-`main.py` selects the pipeline based on the config:
-- `scratch_training.run_execution: True` → scratch pipeline
-- `cnn_ft_training.run_execution: True` → CNN finetuning pipeline
-- otherwise → 3-stage transformer pipeline
+**Backbone:** `vit_base_patch16_dinov3.lvd1689m` (timm, pretrained)
+**Head:** shared 2-layer MLP (768 → 128 → 3) applied independently to each patch token
 
-### 3-Stage Pipeline (pretrained ViT/BEiT)
-
-| Stage | Script | Dataset | What it trains |
-|---|---|---|---|
-| 1 — Domain Adaptation | `run_domain_adaptation.py` | CelebA | Full backbone or LoRA, adapts to face domain |
-| 2 — Probing | `run_probing.py` | Challenge | Frozen backbone + new MLP head |
-| 3 — LoRA Finetuning | `run_lora.py` | Challenge | LoRA weights + head |
-
-Run IDs are chained: each stage passes `precedent_run_id` so the next stage loads the previous checkpoint via MLflow.
-
-### Scratch Pipeline (CNN from scratch)
-
-Single stage: `run_scratch.py` trains `ConvNet` from random init with all parameters unfrozen. No checkpoint chaining. Triggered by `scratch_training.run_execution: True` in the config.
-
-### CNN Finetuning Pipeline (pretrained CNN — e.g. EfficientNet)
-
-Single MLflow run, multiple internal phases in `run_cnn_ft.py`. Triggered by `cnn_ft_training.run_execution: True`.
-
-| Phase | What happens |
-|---|---|
-| 0 — Head warmup | Backbone fully frozen, only MLP head trains at `learning_rate` |
-| 1..n_phases | Progressively unfreeze top blocks (`ceil(total_blocks / n_phases)` per phase), LR = `learning_rate × lr_decay_factor^phase` |
-
-Key config keys (under `cnn_ft_training`): `learning_rate`, `num_epoch_head`, `num_epoch_per_phase`, `n_phases`, `lr_decay_factor`. Block count per phase is computed automatically from the model. Requires `method_kwargs.probing_type` and `method_kwargs.hidden_size` for the MLP head.
-
-Run everything: `python main.py`  
-Run scratch CNN: `python main.py --config cnn_4l.yaml`  
-Run CNN finetuning: `python main.py --config efficient_net.yaml`
+Forward pass:
+```
+backbone.forward_features(x)          → (B, N, 768)   [CLS, reg×4, patch×196]
+patch_tokens = features[:, num_prefix:, :]             → (B, 196, 768)
+logits  = head(patch_tokens)                           → (B, 196, 3)  [bg / visible / occluded]
+probs   = softmax(logits)
+ratio   = Σ p_occ / (Σ p_vis + Σ p_occ)  ∈ [0, 1]   → (B, 1)
+```
 
 ---
 
-## How to Modify / Extend Components
+## Pipeline
 
-### Change the loss function
-1. Add a new `nn.Module` class in [src/models/loss.py](src/models/loss.py)
-2. Add an `elif loss_name == "your_name":` branch in `UniversalLossWrapper.__init__()`
-3. Set `loss_name: your_name` in the relevant section of `config/pipeline_default.yaml` or a model YAML
+### Step 1 — Training (`train_dino_trainval.py`)
+
+Two-phase training, no early stopping, fixed epoch counts:
+
+| Phase | Backbone | Head LR | Backbone LR | Epochs |
+|---|---|---|---|---|
+| 1 — Warmup | frozen | 1e-3 | — | 5 |
+| 2 — Fine-tune | unfrozen | 5e-4 | 2e-5 | 6 |
+
+- **Dataset:** train + val combined (~100k images), 17 bad-annotation images excluded (`EXCLUDE_FILES`)
+- **Loss:** weighted MSE: `Σ(iw × pi × (pred − gt)²) / Σ(iw × pi)` with `pi = 1/30 + gt`
+- **Augmentation:** random horizontal flip, rotation (±15°), color jitter, grayscale, Gaussian blur — no `RandomErasing`
+- **Outputs:** `checkpoints/clean_trainval_phase1.pt`, `dino_trainval_final.pt`, `raw_prediction.csv`
+
+### Step 2 — Fairness post-processing (`post_processing_inject_noise.py`)
+
+Estimates gender on the test set via DINOv3 CLS tokens + logistic regression (trained on train split), then injects Gaussian noise `N(0, var)` on the predictions for images estimated as the target gender. CLS tokens are cached in `cache_cls/` as parquet files.
+
+CLI args: `--test-csv`, `--genre {F,M}`, `--var`
+
+Outputs: `submission/postproc/test_genre.csv`, `submission/postproc/confusion_matrix.csv`, `submission/postproc/test_{genre}_{var}.csv`
+
+### Step 3 — Noise calibration (`post_processing_read_probe.py`)
+
+Given two leaderboard scores (before/after noise injection) and the confusion matrix from Step 2, estimates the optimal noise variance `v* = G / b` analytically and regenerates a submission at that variance.
+
+CLI args: `--s0`, `--s1`, `--var`, `--genre`, `--confusion`, `--test-csv`, `--test-genre`
+
+---
+
+## How to Run
+
+```bash
+# Step 1 — Train (outputs checkpoint + test.csv)
+python train_dino_trainval.py
+
+# Step 2 — Fairness post-processing
+python post_processing_inject_noise.py \
+    --test-csv raw_prediction.csv \
+    --genre F \
+    --var 0.0025
+
+# Step 3 — Calibrate noise from leaderboard probe (optional)
+python post_processing_read_probe.py \
+    --s0 0.00108 --s1 0.00426 --var 0.0025 --genre F \
+    --confusion submission/postproc/confusion_matrix.csv \
+    --test-csv raw_prediction.csv \
+    --test-genre submission/postproc/test_genre.csv
+```
+
+---
+
+## How to Modify / Extend
+
+### Change the training loss
+Edit `weighted_mse()` in [train_dino_trainval.py](train_dino_trainval.py) directly.
+
+### Change the model head
+Edit `PatchHead` and `PatchOcclusionModel` in [train_dino_trainval.py](train_dino_trainval.py).
 
 ### Change importance weights or sampling distribution
-- Weights (`iw`, `pi`) are computed in `distribution_adaptation_reweight()` in [src/data/data_stats.py](src/data/data_stats.py)
-- `iw` = importance weight matching the test distribution; `pi` = label-based weight
-- Modify the KL-divergence ratio computation there to change the reweighting scheme
-- `WeightedRandomSampler` in [src/data/data_loader.py](src/data/data_loader.py) consumes these weights
+Edit `distribution_adaptation_reweight()` in [src/data/data_stats.py](src/data/data_stats.py).
+`N_BINS = 20` is hardcoded there and in [src/data/data_utils.py](src/data/data_utils.py).
 
-### Add a new model
-1. Copy an existing file in `config/models/` as `config/models/<timm_model_name>.yaml`
-2. Set `num_epoch`, `learning_rate`, `loss_name`, `augmentation` etc. for each stage
-3. Pass the model name to `get_model()` in [src/models/models.py](src/models/models.py)
-4. If the backbone uses non-standard attention layer names, add them to the target list in `inject_lora_transformer()` in [src/models/finetuning.py](src/models/finetuning.py) (currently targets: `"qkv"`, `"query"`, `"key"`, `"value"`)
-
-### Add a new training stage
-1. Create `src/pipeline/run_<stage>.py` following the pattern of `run_lora.py`
-2. Call it from `main.py`, passing the `precedent_run_id` from the previous stage
-
-### Add a new scratch CNN architecture
-1. Add a new `nn.Module` class in `src/models/scratch_cnn.py` (or a new file); output shape must be `[B, num_classes]`
-2. Register it in `src/models/__init__.py`: add the import and add `"your_name": YourClass` to `CUSTOM_MODELS`
-3. Create `config/models/your_name.yaml` with `model: "your_name"` and `scratch_training.run_execution: True`
-4. Run with `python main.py --config your_name.yaml`
-
-**Data loading for custom models — two things to watch:**
-- `CUSTOM_MODELS` (from `src.models`) is checked in `_get_transform()` in [src/data/data_loader.py](src/data/data_loader.py) to skip timm's transform resolution, which would crash on unknown model names
-- The scratch transform is minimal: `ToImage() → ToDtype(float32, scale=True) → Normalize(ImageNet stats)` — no resize/crop because challenge images are already 224×224. `ToImage()` is required to convert PIL→tensor before `Normalize` can run
-- Augmentation (random flips, crops etc.) is applied separately by the existing `augmentation_transform` pipeline in the loader — do not add random transforms inside `_get_transform` or they will be doubled
-
-### Change hyperparameters
-- Global defaults: `config/pipeline_default.yaml`
-- Per-model overrides: `config/models/<model_name>.yaml` (deep-merged on top of defaults)
-- `config_utils.load_config(model_name, stage)` returns the merged dict for a given model and stage
-
----
-
-## Running the Project
-
-```bash
-# Full pipeline (default config)
-python main.py
-
-# Choose a specific model config
-python main.py --config vit_tiny_patch16_224_no_celeba.yaml
-
-# Single-batch smoke test (fast sanity check, no GPU needed)
-python test.py
-
-# Cluster (SLURM)
-sbatch scripts/run_cluster.sbatch
-```
-
----
-
-## Visualisation App
-
-An interactive Streamlit app for exploring dataset images and model predictions.
-
-**Run:**
-```bash
-uv run streamlit run src/viz/app.py
-```
-
-**Location:** `src/viz/app.py` — all viz code lives here.  
-**Stars:** `src/viz/stars.json` — persists starred images across runs (not tracked by git).
-
-### Sidebar controls
-| Control | Description |
-|---------|-------------|
-| Model run | Selects a submission dir: `submission/{timestamp}_submission_{model_tag}/` |
-| Split | `train` / `val` / `test` — controls which `{split}.csv` is loaded |
-| Gender | Filter by `Female (0)` / `Male (1)` / `All` (train/val only) |
-| Occlusion interval | Range slider [0 %, 100 %] applied to GT (train/val) or pred (test) |
-| Losses to compare | Multi-select, auto-populated from all `nn.Module` subclasses in `src/models/loss.py` |
-
-### Tabs
-- **Statistics** — overlaid histogram for all available splits, competition score + loss table for the filtered interval (train/val only)
-- **Picture** — random image viewer with GT, prediction, delta, and star/unstar button
-- **Stars** — tile grid of starred images filtered by current sidebar criteria
-
-### CSV format written by the pipeline
-After each training stage, `save_split_predictions()` (`src/pipeline/test.py`) saves:
-
-| File | Columns |
-|------|---------|
-| `submission/{run}/train.csv` | `filename, FaceOcclusion (GT), pred, gender, iw` |
-| `submission/{run}/val.csv`   | `filename, FaceOcclusion (GT), pred, gender, iw` |
-| `submission/{run}/test.csv`  | `filename, FaceOcclusion (pred, submission format)` |
-
-### Add a new loss
-Just add a new `nn.Module` subclass to `src/models/loss.py` — it appears automatically in the loss selector without any changes to the app.
+### Change the train/val split
+Edit `get_challenge_split()` in [src/data/data_utils.py](src/data/data_utils.py).
 
 ---
 
@@ -250,6 +163,5 @@ Just add a new `nn.Module` subclass to `src/models/loss.py` — it appears autom
 
 Update this file whenever:
 - A source file is added, renamed, or deleted → update the Architecture section
-- A new extension point is added (new loss, new stage, new config key) → add a recipe
+- The pipeline steps change → update the Pipeline section
 - Challenge rules or submission format change → update Challenge Overview / Evaluation
-- After any significant refactor, re-run `python test.py` to verify the smoke test still passes

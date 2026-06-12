@@ -1,6 +1,6 @@
 """
-inject_noise.py — Post-processing : injection d'un bruit gaussien sur les
-                  prédictions d'occlusion du genre ESTIMÉ (par DINOv3 + LR).
+post_processing_inject_noise.py — Injection d'un bruit gaussien sur les
+                                   prédictions d'occlusion du genre ESTIMÉ (par DINOv3 + LR).
 
 Pipeline :
   1. CLS de DINOv3 (pré-entraîné) sur train (sous-échantillon), val, test.
@@ -15,15 +15,15 @@ Pipeline :
      → test_{genre}_{var}.csv
 
 Entrées :
-  --test-csv   : CSV de soumission produit par train_clean_trainval.py
+  --test-csv   : CSV de soumission produit par train_dino_trainval.py
                  (colonnes : filename, FaceOcclusion, gender)
   --genre      : genre cible où injecter le bruit  ('F' ou 'M')
   --var        : variance du bruit gaussien (l'écart-type injecté = sqrt(var))
 
 Lancer depuis la racine du projet :
-    python inject_noise.py \
-        --test-csv submission/2026-06-08_22-19-48_submission_vit_base_patch16_dinov3.lvd1689m_clean_trainval/test.csv \
-        --genre F --var 0.0008
+    python post_processing_inject_noise.py \
+        --test-csv raw_prediction.csv \
+        --genre F --var 0.0025
 """
 
 import argparse
