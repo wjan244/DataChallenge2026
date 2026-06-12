@@ -29,7 +29,7 @@ _PW  = NUM_WORKERS > 0
 # Inlined helpers
 # ---------------------------------------------------------------------------
 
-def load_config(config_name="efficientnet_full.yaml"):
+def load_config(config_name="dino_convnext.yaml"):
     with open(CONFIG  / "models" / config_name) as f:
         return yaml.safe_load(f)
 
@@ -50,7 +50,7 @@ def _augmentation():
     return v2.Compose([
         v2.RandomHorizontalFlip(p=0.5),
         v2.RandomApply([v2.RandomRotation(degrees=15)], p=0.3),
-        v2.RandomApply([v2.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2, hue=0.05)], p=0.5),
+        v2.RandomApply([v2. ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2, hue=0.05)], p=0.5),
         v2.RandomGrayscale(p=0.15),
         v2.RandomApply([v2.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0))], p=0.1),
     ])
@@ -157,41 +157,70 @@ def _build_loaders(cfg):
 # Model
 # ---------------------------------------------------------------------------
 
-class EfficientNetHead(nn.Module):
-    def __init__(self, in_features: int, hidden_size: int = 512, mid_size: int = 64, dropout: float = 0.2):
+class PatchHead(nn.Module):
+    """
+    Tête partagée appliquée à chaque position spatiale.
+    Entrée : (B, C, H, W)  — carte de features ConvNeXt
+    Sortie : (B, 1) — ratio occludé / visage ∈ (0,1)
+    """
+    def __init__(self, in_dim, hidden):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(in_features, hidden_size),
-            nn.SiLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_size, mid_size),
-            nn.SiLU(),
-            nn.Dropout(dropout),
-            nn.Linear(mid_size, 1),
-            nn.Sigmoid(),
+            nn.Linear(in_dim, hidden),
+            nn.GELU(),
+            nn.Linear(hidden, 3),        # fond / visible / occludé
         )
 
-    def forward(self, x):
-        return self.net(x).squeeze(-1)  # [B]
+    def forward(self, fmap):
+        # (B, C, H, W) -> (B, H*W, C) : chaque position devient un "token"
+        tokens = fmap.flatten(2).transpose(1, 2)
+        probs  = torch.softmax(self.net(tokens), dim=-1)   # (B, HW, 3)
+
+        p_vis, p_occ = probs[..., 1], probs[..., 2]
+        ratio = p_occ.sum(1) / (p_vis.sum(1) + p_occ.sum(1) + 1e-8)
+        return ratio
 
 
-class EfficientNetFinetuneModel(nn.Module):
-    def __init__(self, backbone, head: EfficientNetHead):
+class PatchOcclusionModel(nn.Module):
+    def __init__(self, backbone, cfg):
         super().__init__()
-        self.backbone = backbone
-        self.head = head
+        self.backbone = backbone                      # nom stable conservé
+        in_dim = backbone.feature_info.channels()[-1]   # 384 pour tiny stage 3
+        self.head = PatchHead(in_dim=in_dim, hidden=cfg["lp_hidden"])
+        self.pretrained_state = {k: v.clone() for k, v in backbone.state_dict().items()}
+        self.n_backbone_trainable = 0
 
     def forward(self, x):
-        return self.head(self.backbone(x))  # [B]
+        fmap = self.backbone(x)[-1]                   # features_only -> liste; (B,384,14,14)
+        return self.head(fmap)
 
+
+def build_model(cfg):
+    backbone = timm.create_model(
+        cfg["model_name"],
+        pretrained=True,
+        features_only=True,
+        out_indices=(2,),                 # stage 3 uniquement, stride 16
+    )
+    model = PatchOcclusionModel(backbone, cfg)
+    _set_n_stages_unfrozen(backbone, 0)   # freeze backbone for phase-0 head warmup
+    print("feature channels:", backbone.feature_info.channels())
+    return model
+
+
+
+
+# --------
 
 def _get_stages(backbone) -> list:
-    """Return flat list of EfficientNet stages (timm backbone.blocks children)."""
-    return list(backbone.blocks.children())
+    """Return ordered list of ConvNeXt stages from FeatureListNet (exposed as stages_0, stages_1, ...)."""
+    stages = [(name, mod) for name, mod in backbone.named_children() if name.startswith("stages_")]
+    stages.sort(key=lambda x: x[0])
+    return [mod for _, mod in stages]
 
 
 def _set_n_stages_unfrozen(backbone, n: int):
-    """Freeze entire backbone then unfreeze top n stages + conv_head + bn2."""
+    """Freeze entire backbone then unfreeze top n stages (ConvNeXt — no cls head in features_only)."""
     for p in backbone.parameters():
         p.requires_grad = False
     if n == 0:
@@ -199,10 +228,6 @@ def _set_n_stages_unfrozen(backbone, n: int):
     for stage in _get_stages(backbone)[-n:]:
         for p in stage.parameters():
             p.requires_grad = True
-    for p in backbone.conv_head.parameters():
-        p.requires_grad = True
-    for p in backbone.bn2.parameters():
-        p.requires_grad = True
 
 
 def _backbone_wd(cfg: dict) -> float:
@@ -214,7 +239,7 @@ def _backbone_wd(cfg: dict) -> float:
     return cfg["weight_decay"]
 
 
-def _build_optimizer_head_only(model: EfficientNetFinetuneModel, cfg: dict):
+def _build_optimizer_head_only(model: PatchOcclusionModel, cfg: dict):
     return torch.optim.AdamW([
         {"params": list(model.head.parameters()),
          "lr": cfg["learning_rate_head"],
@@ -222,7 +247,7 @@ def _build_optimizer_head_only(model: EfficientNetFinetuneModel, cfg: dict):
     ])
 
 
-def _add_stages_to_optimizer(optimizer, model: EfficientNetFinetuneModel, n_total: int, cfg: dict):
+def _add_stages_to_optimizer(optimizer, model: PatchOcclusionModel, n_total: int, cfg: dict):
     """Unfreeze top n_total stages and add newly unfrozen params as a new optimizer group."""
     _set_n_stages_unfrozen(model.backbone, n_total)
     already = {id(p) for g in optimizer.param_groups for p in g["params"]}
@@ -235,15 +260,19 @@ def _add_stages_to_optimizer(optimizer, model: EfficientNetFinetuneModel, n_tota
     model.n_backbone_trainable = sum(p.numel() for p in model.backbone.parameters() if p.requires_grad)
 
 
-def _make_scheduler_phase(optimizer, total_epochs: int):
-    def cosine(epoch):
-        return 0.5 * (1.0 + 0.9 * math.cos(math.pi * epoch / max(1, total_epochs))) # 0.9 to reduce but not to a too small number : reduced by 20
+def _make_scheduler_phase(optimizer, total_epochs: int, warmup_epochs: int = 0):
+    def schedule(epoch):
+        if warmup_epochs > 0 and epoch < warmup_epochs:
+            return (epoch + 1) / warmup_epochs          # linear ramp 0 → 1
+        t = epoch - warmup_epochs
+        n = max(1, total_epochs - warmup_epochs)
+        return 0.5 * (1.0 + 0.9 * math.cos(math.pi * t / n))
     return torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=[cosine] * len(optimizer.param_groups)
+        optimizer, lr_lambda=[schedule] * len(optimizer.param_groups)
     )
 
 
-def l2_sp_penalty(model: EfficientNetFinetuneModel, lambda_sp: float) -> torch.Tensor:
+def l2_sp_penalty(model: PatchOcclusionModel, lambda_sp: float) -> torch.Tensor:
     """L2 penalty relative to pretrained weights, averaged over trainable backbone param count."""
     if model.n_backbone_trainable == 0:
         return torch.tensor(0.0, device=DEVICE)
@@ -259,7 +288,7 @@ def l2_sp_penalty(model: EfficientNetFinetuneModel, lambda_sp: float) -> torch.T
 # Evaluation
 # ---------------------------------------------------------------------------
 
-def _eval_efficientnet(model, val_loader, loss_fn):
+def _eval(model, val_loader, loss_fn):
     score_fn = PWScore()
     preds, ys, iws, pis, gws, genders = [], [], [], [], [], []
     model.eval()
@@ -288,40 +317,10 @@ def _eval_efficientnet(model, val_loader, loss_fn):
 
 
 # ---------------------------------------------------------------------------
-# Build model
-# ---------------------------------------------------------------------------
-
-def build_efficientnet_ft_model(cfg) -> EfficientNetFinetuneModel:
-    backbone = timm.create_model(cfg["model_name"], pretrained=cfg.get("pretrained", True), num_classes=0)
-    for p in backbone.parameters():
-        p.requires_grad = False
-
-    head = EfficientNetHead(
-        in_features=backbone.num_features,
-        hidden_size=cfg.get("hidden_size", 512),
-        mid_size=cfg.get("mid_size", 64),
-        dropout=cfg.get("lp_dropout", 0.2),
-    )
-
-    model = EfficientNetFinetuneModel(backbone, head)
-    model.pretrained_state = (
-        {k: v.clone().detach() for k, v in backbone.state_dict().items()}
-        if float(cfg.get("l2_sp_lambda", 0.0)) > 0 else {}
-    )
-    model.n_backbone_trainable = 0
-
-    if ckpt := cfg.get("resume_checkpoint"):
-        model.load_state_dict(torch.load(ckpt, map_location="cpu"))
-        print(f"Resumed from checkpoint: {ckpt}")
-
-    return model
-
-
-# ---------------------------------------------------------------------------
 # Training
 # ---------------------------------------------------------------------------
 
-def train_efficientnet_full(model, train_loader, val_loader, loss_fn, save_path, cfg):
+def train_full(model, train_loader, val_loader, loss_fn, save_path, cfg):
     n_epoch         = cfg.get("lp_epochs", 50)
     n_head_epochs   = cfg.get("n_head_epochs", 0)
     n_warmup_stages = cfg.get("n_warmup_blocks", 2)
@@ -330,17 +329,18 @@ def train_efficientnet_full(model, train_loader, val_loader, loss_fn, save_path,
     patience        = cfg.get("lp_patience", 10)
     n_total_stages  = cfg["n_blocks"]
     lambda_sp       = float(cfg.get("l2_sp_lambda", 0.0))
+    warmup_epochs   = cfg.get("warmup_epochs", 0)
     phase1_path     = save_path.parent / (save_path.stem + "_phase1.pt")
 
     optimizer = _build_optimizer_head_only(model, cfg)
-    scheduler = _make_scheduler_phase(optimizer, max(n_head_epochs, 1))
+    scheduler = _make_scheduler_phase(optimizer, max(n_head_epochs, 1), warmup_epochs)
     best_score, patience_ctr = float("inf"), 0
 
     for epoch in range(n_epoch):
         # Phase 1: partial unfreeze — only when a warmup window actually exists
         if n_warmup_epochs > 0 and epoch == n_head_epochs:
             _add_stages_to_optimizer(optimizer, model, n_warmup_stages, cfg)
-            scheduler = _make_scheduler_phase(optimizer, n_warmup_epochs)
+            scheduler = _make_scheduler_phase(optimizer, n_warmup_epochs, warmup_epochs)
             patience_ctr = 0
             torch.cuda.empty_cache()
             trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -351,7 +351,7 @@ def train_efficientnet_full(model, train_loader, val_loader, loss_fn, save_path,
         # Phase 2: full unfreeze — fires even when both head and warmup epochs are 0
         if epoch == n_head_epochs + n_warmup_epochs:
             _add_stages_to_optimizer(optimizer, model, n_total_stages, cfg)
-            scheduler = _make_scheduler_phase(optimizer, max(n_epoch - epoch, 1))
+            scheduler = _make_scheduler_phase(optimizer, max(n_epoch - epoch, 1), warmup_epochs)
             patience_ctr = 0
             if n_warmup_epochs > 0:
                 torch.save(model.state_dict(), phase1_path)
@@ -405,10 +405,10 @@ def train_efficientnet_full(model, train_loader, val_loader, loss_fn, save_path,
             metrics["lr_backbone"] = optimizer.param_groups[1]["lr"]
 
         if not no_val:
-            val_score, err_f, err_m, val_loss = _eval_efficientnet(model, val_loader, loss_fn)
+            val_score, err_f, err_m, val_loss = _eval(model, val_loader, loss_fn)
             metrics.update({"val_loss": val_loss, "val_score": val_score,
                             "val_err_female": err_f, "val_err_male": err_m})
-            mlflow.log_metrics(metrics, step=epoch)
+            mlflow.log_metrics({k: v for k, v in metrics.items() if math.isfinite(v)}, step=epoch)
             print(f"[{epoch+1}/{n_epoch}] val_score={val_score:.4f}  err_f={err_f:.4f}  err_m={err_m:.4f}")
 
             if val_score < best_score:
@@ -421,7 +421,7 @@ def train_efficientnet_full(model, train_loader, val_loader, loss_fn, save_path,
                     print(f"Early stop at epoch {epoch+1}")
                     break
         else:
-            mlflow.log_metrics(metrics, step=epoch)
+            mlflow.log_metrics({k: v for k, v in metrics.items() if math.isfinite(v)}, step=epoch)
             torch.save(model.state_dict(), save_path)
 
     if not no_val:
@@ -433,7 +433,7 @@ def train_efficientnet_full(model, train_loader, val_loader, loss_fn, save_path,
 # Submission
 # ---------------------------------------------------------------------------
 
-def save_submission_efficientnet(model, cfg, test_loader, df_test, timestamp, loss_fn, val_loader=None):
+def save_submission(model, cfg, test_loader, df_test, timestamp, loss_fn, val_loader=None):
     name  = cfg.get("name", cfg["model_name"].replace("/", "-"))
     tta_n = cfg.get("tta_n", 0)
 
@@ -448,7 +448,7 @@ def save_submission_efficientnet(model, cfg, test_loader, df_test, timestamp, lo
                 pred = model(imgs)
             preds.append(pred.cpu())
 
-    out = SUBMISSION_DIR / f"{timestamp}_{name}_eff_full" / "test.csv"
+    out = SUBMISSION_DIR / f"{timestamp}_{name}_dino_conv" / "test.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
     df = df_test[["filename"]].copy()
     df["FaceOcclusion"] = torch.cat(preds).numpy()
@@ -457,7 +457,7 @@ def save_submission_efficientnet(model, cfg, test_loader, df_test, timestamp, lo
     print(f"Test submission saved → {out}  ({len(df)} rows)")
 
     if val_loader is not None:
-        val_score, err_f, err_m, _ = _eval_efficientnet(model, val_loader, loss_fn)
+        val_score, err_f, err_m, _ = _eval(model, val_loader, loss_fn)
         mlflow.log_metrics({
             "final_val_score":      val_score,
             "final_val_err_female": err_f,
@@ -470,7 +470,7 @@ def save_submission_efficientnet(model, cfg, test_loader, df_test, timestamp, lo
 # Entry point
 # ---------------------------------------------------------------------------
 
-def run_efficientnet_full(file_name, timestamp, experiment_id):
+def run_dino_conv(file_name, timestamp, experiment_id):
     cfg = load_config(file_name)
 
     seed = cfg.get("seed", 42)
@@ -485,23 +485,31 @@ def run_efficientnet_full(file_name, timestamp, experiment_id):
     train_loader, val_loader, val_loader_noisy, df_test, test_loader = _build_loaders(cfg)
 
     loss_fn   = build_loss(cfg)
-    model     = build_efficientnet_ft_model(cfg).to(DEVICE)
+    model     = build_model(cfg).to(DEVICE)
     # move pretrained reference weights to device once so l2_sp_penalty avoids per-batch .to() calls
-    model.pretrained_state = {k: v.to(DEVICE) for k, v in model.pretrained_state.items()}
-    save_path = CHECKPOINT_DIR / f"{timestamp}_efficientnet_full.pt"
+    model.pretrained_state = {k: v.to(DEVICE) for k, v in model.pretrained_state.items()}  # captured in __init__
+
+    resume = cfg.get("resume_checkpoint")
+    if resume:
+        ckpt = torch.load(resume, map_location=DEVICE)
+        model.load_state_dict(ckpt)
+        print(f"Resumed from checkpoint: {resume}")
+
+    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    save_path = CHECKPOINT_DIR / f"{timestamp}_full.pt"
 
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total     = sum(p.numel() for p in model.parameters())
     print(f"Phase 0 (head only) — trainable: {trainable:,} / {total:,}")
 
-    with mlflow.start_run(experiment_id=experiment_id, run_name=f"efficientnet_full_{timestamp}"):
+    with mlflow.start_run(experiment_id=experiment_id, run_name=f"full_{timestamp}"):
         mlflow.log_params({k: v for k, v in cfg.items() if not isinstance(v, (dict, list))})
         mlflow.log_params({"trainable_params_phase0": trainable, "no_val": no_val})
 
-        model, best_score = train_efficientnet_full(
+        model, best_score = train_full(
             model, train_loader, val_loader, loss_fn, save_path, cfg
         )
-        save_submission_efficientnet(model, cfg, test_loader, df_test, timestamp, loss_fn, val_loader_noisy)
+        save_submission(model, cfg, test_loader, df_test, timestamp, loss_fn, val_loader_noisy)
         if best_score is not None:
             mlflow.log_metric("best_val_score", best_score)
         print("Done.")

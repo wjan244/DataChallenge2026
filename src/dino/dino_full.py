@@ -100,12 +100,15 @@ def _make_scheduler(optimizer, warmup_epochs: int, total_epochs: int):
 # --- end copied from run_unfreeze.py ---
 
 
-def _make_scheduler_phase2(optimizer, total_epochs: int):
-    """Cosine decay for all param groups — used after phase-2 adds a 3rd group."""
-    def cosine(epoch):
-        return 0.5 * (1.0 + math.cos(math.pi * epoch / max(1, total_epochs)))
-    n_groups = len(optimizer.param_groups)
-    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=[cosine] * n_groups)
+def _make_scheduler_phase(optimizer, total_epochs: int, warmup_epochs: int = 0):
+    """Cosine decay with optional linear warmup for all param groups."""
+    def schedule(epoch):
+        if warmup_epochs > 0 and epoch < warmup_epochs:
+            return (epoch + 1) / warmup_epochs
+        t = epoch - warmup_epochs
+        n = max(1, total_epochs - warmup_epochs)
+        return 0.5 * (1.0 + 0.9 * math.cos(math.pi * t / n))
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=[schedule] * len(optimizer.param_groups))
 
 
 def _set_blocks_unfrozen(backbone, n: int):
@@ -194,17 +197,18 @@ def train_full(model, train_loader, train_no_aug_loader, val_loader, loss_fn, sa
     patience        = cfg.get("lp_patience", 5)
     n_total_blocks  = cfg["n_blocks"]
     lambda_sp       = float(cfg.get("l2_sp_lambda", 0.0))
+    warmup_epochs   = cfg.get("warmup_epochs", 0)
     phase1_path     = save_path.parent / (save_path.stem + "_phase1.pt")
 
     optimizer = _build_optimizer_head_only(model, cfg)
-    scheduler = _make_scheduler_phase2(optimizer, max(n_head_epochs, 1))
+    scheduler = _make_scheduler_phase(optimizer, max(n_head_epochs, 1), warmup_epochs)
     best_score, patience_ctr = float("inf"), 0
 
     for epoch in range(n_epoch):
         # Phase 1 transition: unfreeze top n_warmup_blocks
         if epoch == n_head_epochs:
             _add_blocks_to_optimizer(optimizer, model, n_warmup_blocks, cfg)
-            scheduler = _make_scheduler_phase2(optimizer, max(n_warmup_epochs, 1))
+            scheduler = _make_scheduler_phase(optimizer, max(n_warmup_epochs, 1), warmup_epochs)
             patience_ctr = 0
             trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
             mlflow.log_param("phase1_start_epoch", epoch)
@@ -214,7 +218,7 @@ def train_full(model, train_loader, train_no_aug_loader, val_loader, loss_fn, sa
         # Phase 2 transition: unfreeze all n_total_blocks
         if epoch == n_head_epochs + n_warmup_epochs:
             _add_blocks_to_optimizer(optimizer, model, n_total_blocks, cfg)
-            scheduler = _make_scheduler_phase2(optimizer, max(n_epoch - epoch, 1))
+            scheduler = _make_scheduler_phase(optimizer, max(n_epoch - epoch, 1), warmup_epochs)
             patience_ctr = 0
             torch.save(model.state_dict(), phase1_path)
             trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -279,7 +283,8 @@ def train_full(model, train_loader, train_no_aug_loader, val_loader, loss_fn, sa
                     break
         else:
             mlflow.log_metrics(metrics, step=epoch)
-            torch.save(model.state_dict(), save_path)
+            if (epoch + 1) % 5 == 0:
+                torch.save(model.state_dict(), save_path)
 
     if not no_val:
         model.load_state_dict(torch.load(save_path, map_location="cpu"))
@@ -311,7 +316,7 @@ def save_submission_full(model, cfg, test_loader, val_noisy_loader, timestamp, l
 
     out = SUBMISSION_DIR / f"{timestamp}_{name}_full" / "test.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
-    df = pd.read_csv(emb_dir / "test_meta.csv")
+    df = pd.read_csv(DATA / "occlusion_datasets" / "test_students.csv")
     df["FaceOcclusion"] = torch.cat(preds).numpy()
     df["gender"] = "x"
     df[["filename", "FaceOcclusion", "gender"]].to_csv(out, index=False)

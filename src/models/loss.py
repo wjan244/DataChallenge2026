@@ -9,6 +9,7 @@ class WeightedMSELoss(nn.Module):
         super().__init__()
 
     def forward(self, y_pred, y_true, iw, pi):
+        y_pred, y_true = y_pred.view(-1), y_true.view(-1)
         try:
             eps = 1e-8
             combined_weights = iw * pi   # w_i * p(y_i)
@@ -16,7 +17,7 @@ class WeightedMSELoss(nn.Module):
             denominator = torch.sum(combined_weights)   #dénominateur
         except ValueError:
             print("coefficients mal définis")
-        
+
         return numerator / (denominator + eps)
 
 #TODO check that iw and pi are not inversed
@@ -26,6 +27,7 @@ class WeightedLiteMSELoss(nn.Module):
         super().__init__()
 
     def forward(self, y_pred, y_true, iw):
+        y_pred, y_true = y_pred.view(-1), y_true.view(-1)
         try:
             return (iw * (y_pred - y_true) ** 2).mean()
         except ValueError as e:
@@ -37,7 +39,7 @@ class PLoss(nn.Module):
         super().__init__()
 
     def forward(self, y_pred, y_true, iw, pi, gw, gender):
-        # gender not used but added for eeasier calling of the function without if
+        y_pred, y_true = y_pred.view(-1), y_true.view(-1)
         combined_weights = pi
         return torch.sum(combined_weights * (y_true - y_pred) ** 2) / (torch.sum(combined_weights)+EPS)
     
@@ -46,7 +48,7 @@ class PWLoss(nn.Module):
         super().__init__()
 
     def forward(self, y_pred, y_true, iw, pi, gw, gender):
-        # gender not used but added for eeasier calling of the function without if
+        y_pred, y_true = y_pred.view(-1), y_true.view(-1)
         combined_weights = iw * pi
         return torch.sum(combined_weights * (y_true - y_pred) ** 2) / (torch.sum(combined_weights)+EPS)
     
@@ -56,7 +58,7 @@ class PWGLoss(nn.Module):
         super().__init__()
 
     def forward(self, y_pred, y_true, iw, pi, gw, gender):
-        # gender not used but added for eeasier calling of the function without if
+        y_pred, y_true = y_pred.view(-1), y_true.view(-1)
         combined_weights = iw * pi * gw
         return torch.sum(combined_weights * (y_true - y_pred) ** 2) / (torch.sum(combined_weights)+EPS)
     
@@ -67,6 +69,7 @@ class PWGLossRegularized(nn.Module):
         self.alpha = alpha
 
     def forward(self, y_pred, y_true, iw, pi, gw, gender):
+        y_pred, y_true = y_pred.view(-1), y_true.view(-1)
         w  = (iw * pi * gw).view(-1)
         se = ((y_true - y_pred) ** 2).view(-1)
         g  = gender.view(-1)
@@ -82,8 +85,9 @@ class HuberPWGLossRegularized(nn.Module):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
-    
+
     def HuberLoss(self, y_true, y_pred, w):
+        y_pred, y_true = y_pred.view(-1), y_true.view(-1)
         delta = torch.abs(y_true - y_pred)
         
         l = torch.where(delta < self.beta,
@@ -105,7 +109,7 @@ class HuberPWGLossRegularized(nn.Module):
 
 
 class CompoundLoss(nn.Module):
-    def __init__(self, alpha=1.0, beta=0.1, gamma= 1.0, kappa=1.0):
+    def __init__(self, alpha=1.0, beta=0.1, gamma= 1.0, kappa=1.0, tau=1.0):
         # alpha -> 0 : no regularisation
         # beta -> 1: no err M vs F
         # gamma -> 0 : Poss
@@ -117,14 +121,16 @@ class CompoundLoss(nn.Module):
         self.beta = beta
         self.gamma = gamma
         self.kappa = kappa
+        self.tau = tau
         
     def HuberLoss(self, y_true, y_pred, w):
+        y_pred, y_true = y_pred.view(-1), y_true.view(-1)
         delta = torch.abs(y_true - y_pred)
-        
+
         l = torch.where(delta < self.beta,
                 0.5 * delta**2,
                 self.beta * (delta - 0.5 * self.beta))
-        
+
         return torch.sum(w * l) / (torch.sum(w)+EPS)
         
 
@@ -144,7 +150,7 @@ class CompoundLoss(nn.Module):
         
         err_f = self.HuberLoss(y_true[mask_f], y_pred[mask_f], w[mask_f])
         err_m = self.HuberLoss(y_true[mask_m], y_pred[mask_m], w[mask_m])
-        return (err_f + err_m) / 2 + self.alpha * torch.sqrt(torch.square(err_f - err_m) + EPS)
+        return (err_f + err_m) / 2 + self.alpha * torch.sqrt(torch.square(err_f - err_m) + EPS)**self.tau
 
     
 class UniversalLossWrapper(nn.Module):
@@ -170,6 +176,10 @@ class PWScore(nn.Module):
         w  = (iw * pi).view(-1)
         se = ((y_true - y_pred) ** 2).view(-1)
         g  = gender.view(-1)
+        assert w.shape == se.shape == g.shape, (
+            f"PWScore shape mismatch: w={w.shape}, se={se.shape}, g={g.shape}. "
+            f"Raw shapes — y_pred={y_pred.shape}, y_true={y_true.shape}"
+        )
         mask_f = g == 0.0
         mask_m = g == 1.0
         err_f = torch.sum(w[mask_f] * se[mask_f]) / (torch.sum(w[mask_f]) + EPS)
@@ -181,6 +191,7 @@ class PScore(nn.Module):
         super().__init__()
 
     def forward(self, y_pred, y_true, iw, pi, gender):
+        y_pred, y_true = y_pred.view(-1), y_true.view(-1)
         w  = (pi).view(-1)
         se = ((y_true - y_pred) ** 2).view(-1)
         g  = gender.view(-1)

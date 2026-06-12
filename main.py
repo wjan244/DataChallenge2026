@@ -33,11 +33,11 @@ SEED = load_config(CONFIG_DEFAULT)["globaux"]["SEED"]
 
 
 # seeds
-# random.seed(SEED)
-# np.random.seed(SEED)
-# torch.manual_seed(SEED)
-# if torch.cuda.is_available():
-#     torch.cuda.manual_seed_all(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(SEED)
 
 def main(file_name):
     cfg = load_config(file_name)
@@ -68,6 +68,9 @@ def main(file_name):
     elif cfg.get("type") == "efficientnet_full":
         from src.efficientnet.efficientnet_full import run_efficientnet_full
         run_efficientnet_full(file_name, timestamp, experiment_id)
+    elif cfg.get("type") == "dino_conv":
+        from src.dino_conv import run_dino_conv
+        run_dino_conv(file_name, timestamp, experiment_id)
     elif cfg.get("scratch_training", {}).get("run_execution") == True:
         run_scratch(cfg, timestamp, experiment_id)
     elif cfg.get("cnn_ft_training", {}).get("run_execution") == True:

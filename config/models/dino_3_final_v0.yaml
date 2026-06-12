@@ -1,0 +1,43 @@
+# Model
+model_name: "facebook/dinov3-vitb16-pretrain-lvd1689m"
+type: dino_full
+embedding_dir: "embedding-vitb16+patches"
+embed_dim: 768
+
+# Data
+train_use_noisy: false
+augmentation: true
+smooth_alpha: 0
+
+# CNN head
+head_checkpoint: checkpoints/selected/dino_cnn_2026-06-09_20-48-20_best_exp_pad_v3.pt
+lp_loss: "CompoundLoss"
+lp_loss_alpha: 1.0
+lp_loss_beta: 0.1
+lp_loss_gamma: 1.0
+lp_loss_kappa: 1.0
+lp_dropout: 0.2
+
+# Training
+lp_batch_size: 256
+lp_epochs: 30
+lp_patience: 10
+weight_decay: 1.0e-4
+learning_rate_head: 1.0e-4
+learning_rate_backbone: 1.0e-5
+l2_sp_lambda: 0.1          # >0 penalises backbone deviation from pretrained init; sets backbone weight_decay=0
+
+# Three-phase unfreezing
+n_head_epochs: 0          # phase 0: head only (0 = skip, go straight to phase 1)
+n_warmup_blocks: 3        # phase 1: top N blocks unfrozen
+n_warmup_block_epochs: 3  # epochs to train with only phase-1 blocks
+n_blocks: 12              # phase 2: total blocks to unfreeze
+
+# No-augmentation finale
+no_aug_last_n_epochs: 0
+
+# Full-data mode (no validation, use all data for training)
+no_val: false
+
+# TTA at inference (0 = off, 2 = original + hflip)
+tta_n: 0

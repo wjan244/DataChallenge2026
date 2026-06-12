@@ -252,21 +252,18 @@ class PatchDataset(Dataset):
 
 
 class ImageDataset(Dataset):
-    """Loads raw images from IMG_DIR using the same split/noisy/iw logic as EmbeddingDataset.
-    Reads {split}_meta.csv from the embedding_dir so the train/val split is identical to LP/CNN runs.
-    The base_transform (normalization) is passed in from outside; augmentation is composed on top.
+    """Loads raw images from IMG_DIR using train_split.csv / val_split.csv (which include a
+    `noisy` column = 1 for noisy-label samples).  The base_transform (normalization) is passed
+    in from outside; augmentation is composed on top.
     """
     def __init__(self, split: str, cfg: dict, transform, augment: bool = False):
-        emb_dir = DATA / cfg["embedding_dir"]
-        self.meta = pd.read_csv(emb_dir / f"{split}_meta.csv")
-
-        # same noisy filtering as EmbeddingDataset
-        noisy = pd.read_csv(DATA / "occlusion_datasets" / "validation_noisy.csv")
-        noisy_files = set(noisy["filename"])
-        mask = self.meta["filename"].isin(noisy_files)
-        if (split == "val"   and not cfg.get("val_use_noisy",   True)) or \
-           (split == "train" and not cfg.get("train_use_noisy", True)):
-            self.meta = self.meta[~mask].reset_index(drop=True)
+        if split == "test":
+            self.meta = pd.read_csv(DATA / "occlusion_datasets" / "test_students.csv")
+        else:
+            self.meta = pd.read_csv(DATA / "occlusion_datasets" / f"{split}_split.csv")
+            use_noisy_key = "val_use_noisy" if split == "val" else "train_use_noisy"
+            if not cfg.get(use_noisy_key, True):
+                self.meta = self.meta[self.meta["noisy"] == 0].reset_index(drop=True)
 
         self.filenames = self.meta["filename"].tolist()
         n = len(self.meta)

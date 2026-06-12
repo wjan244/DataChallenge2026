@@ -58,6 +58,7 @@ def objective_cnn(trial, base_cfg, experiment_id):
     cfg["lp_loss_beta"]    = trial.suggest_float("lp_loss_beta", 0.01, 1.0)
     cfg["lp_loss_gamma"]   = trial.suggest_float("lp_loss_gamma", 0.0, 2.0)
     cfg["lp_loss_kappa"]   = trial.suggest_float("lp_loss_kappa", 0.0, 2.0)
+    cfg["lp_loss_tau"]     = trial.suggest_float("lp_loss_tau", 0.5, 2.0)
     cfg["smooth_alpha"]    = trial.suggest_int("smooth_alpha", 5, 100)
     cfg["lp_epochs"]       = base_cfg.get("optuna_epochs", 20)
     cfg["lp_patience"]     = base_cfg.get("optuna_patience", 5)
@@ -85,7 +86,7 @@ def objective_cnn(trial, base_cfg, experiment_id):
                           run_name=f"trial_{trial.number}", nested=True):
         mlflow.log_params({k: cfg[k] for k in
                    ["lp_lr", "lp_dropout", "lp_weight_decay",
-                    "lp_loss_alpha", "lp_loss_beta", "lp_loss_gamma", "lp_loss_kappa", "smooth_alpha"]})
+                    "lp_loss_alpha", "lp_loss_beta", "lp_loss_gamma", "lp_loss_kappa", "lp_loss_tau", "smooth_alpha"]})
         _, best_score = train_cnn(model, train_loader, val_loader,
                          optimizer, scheduler, loss_fn, save_path, cfg, trial=trial)
     return best_score

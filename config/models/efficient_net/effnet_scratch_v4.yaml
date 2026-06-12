@@ -1,0 +1,47 @@
+type: efficientnet_full
+model_name: "efficientnet_b0"   # timm id; swap to tf_efficientnetv2_s.in21k for stronger run
+# tf_efficientnetv2_s.in21k"
+seed: 42
+pretrained: false
+
+# Data
+augmentation: true
+smooth_alpha: 0
+train_use_noisy: false
+val_use_noisy: true
+
+# MLP head  (num_features → hidden_size → mid_size → 1 → Sigmoid, SiLU activations)
+hidden_size: 128
+mid_size: 32
+lp_dropout: 0.2
+
+# Loss
+lp_loss: "CompoundLoss"
+lp_loss_alpha: 1.0
+lp_loss_beta: 0.1
+lp_loss_gamma: 1.0
+lp_loss_kappa: 1.0
+
+# Training
+lp_batch_size: 256
+lp_epochs: 200
+lp_patience: 10
+weight_decay: 1.0e-4
+learning_rate_head: 1.0e-4
+learning_rate_backbone: 1.0e-4
+l2_sp_lambda: 0
+
+# Three-phase unfreezing  (EfficientNet-B0 has 7 stages in backbone.blocks)
+n_head_epochs: 5           # phase 0: head only
+n_warmup_blocks: 4          # phase 1: top 2 stages unfrozen
+n_warmup_block_epochs: 4    # epochs in phase 1
+n_blocks: 7                 # phase 2: all 7 stages
+
+# Full-data mode (false = use proper val split)
+no_val: false
+
+# TTA at inference (0 = off, 2 = original + hflip)
+tta_n: 0
+
+# Resume from a saved checkpoint (backbone + head); uncomment and set path to continue training
+resume_checkpoint: "checkpoints/2026-06-12_01-42-58_efficientnet_full.pt"

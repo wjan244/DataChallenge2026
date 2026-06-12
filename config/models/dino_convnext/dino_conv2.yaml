@@ -1,0 +1,46 @@
+type: dino_conv
+model_name: "convnext_tiny.dinov3_lvd1689m"
+seed: 42
+pretrained: true
+
+# Data
+augmentation: true
+smooth_alpha: 0
+train_use_noisy: false
+val_use_noisy: true
+
+# MLP head  
+lp_hidden: 64
+lp_dropout: 0.2
+
+# Loss
+lp_loss: "CompoundLoss"
+lp_loss_alpha: 1.0
+lp_loss_beta: 0.1
+lp_loss_gamma: 1.0
+lp_loss_kappa: 1.0
+
+# Training
+lp_batch_size: 256
+lp_epochs: 60
+lp_patience: 10
+weight_decay: 1.0e-4
+learning_rate_head: 1.0e-3
+learning_rate_backbone: 1.0e-5
+l2_sp_lambda: 1
+warmup_epochs: 5          # linear LR ramp at the start of each phase
+
+# Three-phase unfreezing  (ConvNeXt-Tiny has 4 stages)
+n_head_epochs: 5           # phase 0: head only
+n_warmup_blocks: 2          # phase 1: top N stages unfrozen
+n_warmup_block_epochs: 3    # epochs in phase 1
+n_blocks: 4                 # phase 2: all 4 stages
+
+# Full-data mode (false = use proper val split)
+no_val: false
+
+# TTA at inference (0 = off, 2 = original + hflip)
+tta_n: 0
+
+# Resume from a saved checkpoint (backbone + head); uncomment and set path to continue training
+# resume_checkpoint: "checkpoints/2026-06-10_22-19-13_efficientnet_full.pt"

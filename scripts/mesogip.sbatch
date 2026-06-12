@@ -1,15 +1,16 @@
 #!/bin/bash
 
-#SBATCH --time=16:00:00
+#SBATCH --time=8:00:00
 #SBATCH --cpus-per-task=8 # nber of env = #cpus - 2 (main process + OS)
 #SBATCH --ntasks=1
 #SBATCH --mem=64G 
-##SBATCH --partition 3090
+#SBATCH --partition ENSTA-h100
+#SBATCH --partition ENSTA-l40s
 ##SBATCH --partition P100
 #SBATCH --gpus 1
 
 #SBATCH --acctg-freq=task=10
-#SBATCH --job-name=test
+#SBATCH --job-name=dc
 #SBATCH --error=logs/%j.out
 #SBATCH --output=logs/%j.out
 
@@ -48,7 +49,7 @@
 
 echo "=== JOB START ==="
 
-cd ~/DataChallenge2026
+cd /home/telecom-paris/tp-cmergny-25/datachallenge
 uv sync
 # source ~/.bashrc
 source .venv/bin/activate
