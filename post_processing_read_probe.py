@@ -38,9 +38,9 @@ Sortie :
 Lancer depuis la racine du projet :
     python post_processing_read_probe.py \
         --s0 0.00108 --s1 0.00426 --var 0.0025 --genre F \
-        --confusion submission/postproc/confusion_matrix.csv \
-        --test-csv raw_prediction.csv \
-        --test-genre submission/postproc/test_genre.csv
+        --confusion data/results/confusion_matrix.csv \
+        --test-csv data/results/raw_prediction.csv \
+        --test-genre data/results/test_genre.csv
 """
 
 import argparse
@@ -49,7 +49,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-OUT_DIR     = Path("submission/postproc")
+OUT_DIR     = Path("data/results")
 SEED        = 42
 GENDER_CHAR = {"F", "M"}
 

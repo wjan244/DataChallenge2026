@@ -110,7 +110,7 @@ Estimates gender on the test set via DINOv3 CLS tokens + logistic regression (tr
 
 CLI args: `--test-csv`, `--genre {F,M}`, `--var`
 
-Outputs: `submission/postproc/test_genre.csv`, `submission/postproc/confusion_matrix.csv`, `submission/postproc/test_{genre}_{var}.csv`
+Outputs: `data/results/test_genre.csv`, `data/results/confusion_matrix.csv`, `data/results/test_{genre}_{var}.csv`
 
 ### Step 3 — Noise calibration (`post_processing_read_probe.py`)
 
@@ -135,9 +135,9 @@ python post_processing_inject_noise.py \
 # Step 3 — Calibrate noise from leaderboard probe (optional)
 python post_processing_read_probe.py \
     --s0 0.00108 --s1 0.00426 --var 0.0025 --genre F \
-    --confusion submission/postproc/confusion_matrix.csv \
+    --confusion data/results/confusion_matrix.csv \
     --test-csv raw_prediction.csv \
-    --test-genre submission/postproc/test_genre.csv
+    --test-genre data/results/test_genre.csv
 ```
 
 ---

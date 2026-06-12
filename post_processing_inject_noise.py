@@ -22,7 +22,7 @@ Entrées :
 
 Lancer depuis la racine du projet :
     python post_processing_inject_noise.py \
-        --test-csv raw_prediction.csv \
+        --test-csv data/results/raw_prediction.csv \
         --genre F --var 0.0025
 """
 
@@ -46,7 +46,7 @@ from src.data.dataset import Dataset as ChallengeDataset
 
 MODEL_NAME    = "vit_base_patch16_dinov3.lvd1689m"
 CACHE_DIR     = Path("cache_cls")
-OUT_DIR       = Path("submission/postproc")        # sorties de ce script
+OUT_DIR       = Path("data/results")               # sorties de ce script
 TRAIN_SUBSAMP = 40000                              # sous-échantillon train pour la LR
 BATCH_SIZE    = 128
 SEED          = 42

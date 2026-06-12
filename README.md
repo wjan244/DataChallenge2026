@@ -24,7 +24,7 @@ python train_dino_trainval.py
 **Step 2 — Fairness post-processing** (injects calibrated Gaussian noise on the predicted-female images to reduce the gender disparity penalty):
 ```bash
 python post_processing_inject_noise.py \
-    --test-csv raw_prediction.csv \
+    --test-csv data/results/raw_prediction.csv \
     --genre F \
     --var 0.0025
 ```
@@ -33,9 +33,9 @@ python post_processing_inject_noise.py \
 ```bash
 python post_processing_read_probe.py \
     --s0 0.00108 --s1 0.00426 --var 0.0025 --genre F \
-    --confusion submission/postproc/confusion_matrix.csv \
-    --test-csv raw_prediction.csv \
-    --test-genre submission/postproc/test_genre.csv
+    --confusion data/results/confusion_matrix.csv \
+    --test-csv data/results/raw_prediction.csv \
+    --test-genre data/results/test_genre.csv
 ```
 
 ---
@@ -64,6 +64,6 @@ src/data/data_stats.py              Distribution reweighting (importance weights
 
 data/                               Images + CSVs
 checkpoints/                        Intermediate training checkpoints
-submission/postproc/                Noise-injection outputs
+data/results/                       Post-processing outputs and predictions
 test_distribution.png               Test-set occlusion histogram (domain reweighting)
 ```
