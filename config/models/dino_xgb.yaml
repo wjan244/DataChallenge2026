@@ -1,0 +1,28 @@
+model_name: "facebook/dinov3-vitb16-pretrain-lvd1689m"
+embedding_dir: "embeddings_xgb"
+embed_batch_size: 64
+
+lp_batch_size: 64
+lp_epochs: 30
+lp_patience: 7
+lp_dropout: 0.2
+amo_hidden: 128
+gender_hidden: 64
+gender_lambda: 0.5
+learning_rate_head: 3.0e-4
+weight_decay: 1.0e-4
+smooth_alpha: 0
+train_use_noisy: false
+val_use_noisy: true
+
+lp_loss: "CompoundLoss"
+lp_loss_alpha: 1.0
+lp_loss_beta: 0.1
+lp_loss_gamma: 1.0
+lp_loss_kappa: 0.0
+
+xgb_n_estimators: 1000
+xgb_max_depth: 4
+xgb_lr: 0.05
+
+# head_checkpoint_dir: checkpoints/20260613_114638_xgb/

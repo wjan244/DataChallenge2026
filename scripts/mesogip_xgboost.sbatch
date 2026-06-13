@@ -1,12 +1,13 @@
 #!/bin/bash
-
-#SBATCH --time=2:00:00
-#SBATCH --cpus-per-task=12 # nber of env = #cpus - 2 (main process + OS)
+#SBATCH --time=8:00:00
+#SBATCH --cpus-per-task=8 # nber of env = #cpus - 2 (main process + OS)
 #SBATCH --ntasks=1
-#SBATCH --mem=128G 
-#SBATCH --partition gpu
+#SBATCH --mem=64G 
+#SBATCH --partition ENSTA-h100
+#SBATCH --partition ENSTA-l40s
+##SBATCH --partition P100
 #SBATCH --gpus 1
-#SBATCH --account p_test_rma
+
 
 #SBATCH --acctg-freq=task=10
 #SBATCH --job-name=test
@@ -55,13 +56,13 @@ uv sync
 # source ~/.bashrc
 source .venv/bin/activate
 uv pip install "transformers<5.0"
-# echo "args: $*"
-# if [ $# -eq 0 ]; then
-#   python main.py
-# else
-#   python main.py --config "$@"
-# fi
-python src/dino/embed.py
+echo "args: $*"
+if [ $# -eq 0 ]; then
+  python src/xgboost_dino.py --config dino_xgb.yaml
+
+else
+  python src/xgboost_dino.py --config "$@"
+fi
 
 echo "=== JOB END ==="
 echo "timestamp: $(date -Is)"

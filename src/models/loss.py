@@ -150,7 +150,7 @@ class CompoundLoss(nn.Module):
         
         err_f = self.HuberLoss(y_true[mask_f], y_pred[mask_f], w[mask_f])
         err_m = self.HuberLoss(y_true[mask_m], y_pred[mask_m], w[mask_m])
-        return (err_f + err_m) / 2 + self.alpha * torch.sqrt(torch.square(err_f - err_m) + EPS)**self.tau
+        return err_m #(err_f + err_m) / 2 + self.alpha * torch.sqrt(torch.square(err_f - err_m) + EPS)**self.tau
 
     
 class UniversalLossWrapper(nn.Module):
